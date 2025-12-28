@@ -1,0 +1,102 @@
+<!DOCTYPE html>
+<html lang="cs">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#667eea">
+    <title>Výbušná koťátka</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1 id="main-title" style="cursor: pointer;" title="Klikni pro obnovení stránky">Výbušná koťátka</h1>
+        </header>
+
+        <!-- Login Screen -->
+        <div id="login-screen" class="screen">
+            <div class="box login-box">
+                <h2>Přihlášení</h2>
+                <input type="text" id="player-name" placeholder="Zadej své jméno" maxlength="20">
+                <button id="join-btn" class="btn-primary">Přihlásit</button>
+                <div id="login-error" class="error-message"></div>
+                <div style="text-align: center; margin-top: 15px; font-size: 0.9em;">
+                    <a href="/super_power" style="color: #667eea; text-decoration: none; opacity: 0.7;">🔐 Super Power</a>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lobby Screen -->
+        <div id="lobby-screen" class="screen hidden">
+            <div class="box lobby-box">
+                <h2>Lobby</h2>
+                <div id="players-list" class="players-list"></div>
+                <button id="ready-btn" class="btn-primary">Připraven</button>
+                <button id="leave-btn" class="btn-secondary">Odejít</button>
+                <div id="lobby-status" class="status-message"></div>
+            </div>
+        </div>
+
+        <!-- Game Screen -->
+        <div id="game-screen" class="screen hidden">
+            <div class="game-container">
+                <!-- Deck Info and Players Row -->
+                <div class="deck-players-row">
+                    <!-- Deck Info -->
+                    <div class="box deck-info-box">
+                        <h3>Balíček</h3>
+                        <div id="deck-size" class="deck-size">-</div>
+                    </div>
+                    
+                    <!-- Players -->
+                    <div id="players-container" class="players-container"></div>
+                </div>
+
+                <!-- Actions -->
+                <div class="box actions-box">
+                    <button id="draw-card-btn" class="btn-primary">Líznout kartu</button>
+                    <button id="restart-game-btn" class="btn-primary hidden">Začít novou hru</button>
+                </div>
+
+                <!-- Messages (Chat) - uprostřed -->
+                <div class="box messages-box">
+                    <h3>Chat</h3>
+                    <div id="game-messages" class="messages"></div>
+                </div>
+
+                <!-- My Hand (Karty) - dole -->
+                <div class="box hand-box">
+                    <h3>Tvoje karty</h3>
+                    <div id="my-hand" class="hand"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- See Future Modal -->
+    <div id="see-future-modal" class="modal">
+        <div class="modal-content">
+            <h3>Pohledni do budoucnosti - Top 3 karty</h3>
+            <div id="modal-cards" class="modal-cards"></div>
+            <button id="close-modal-btn" class="btn-primary">Zavřít</button>
+        </div>
+    </div>
+
+    <!-- Favor Target Selection Modal -->
+    <div id="favor-modal" class="modal">
+        <div class="modal-content">
+            <h3>Vyber cílového hráče pro Tohle si vezmu</h3>
+            <div id="favor-players-list" class="favor-players-list"></div>
+            <button id="cancel-favor-btn" class="btn-secondary">Zrušit</button>
+        </div>
+    </div>
+
+    <!-- Explosion Effect Overlay -->
+    <div id="explosion-overlay" class="explosion-overlay"></div>
+
+    <script src="/static/app.js"></script>
+</body>
+</html>
+

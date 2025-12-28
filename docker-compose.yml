@@ -1,0 +1,8 @@
+services:
+  vybusna-kotatka:
+    image: ghcr.io/elvisek2020/web-exploding_kitten:latest
+    container_name: vybusna-kotatka
+    ports:
+      - "80:8000"
+    restart: unless-stopped
+

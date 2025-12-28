@@ -1,0 +1,14 @@
+{
+  "id": "base",
+  "name": "Base MVP",
+  "assets_root": "/static/cards/placeholder",
+  "cards": [
+    {"type": "SKIP", "count": 8},
+    {"type": "ATTACK", "count": 8},
+    {"type": "SHUFFLE", "count": 8},
+    {"type": "SEE_FUTURE", "count": 8},
+    {"type": "FAVOR", "count": 7},
+    {"type": "NOPE", "count": 7},
+    {"type": "REVERSE", "count": 6}
+  ]
+}
