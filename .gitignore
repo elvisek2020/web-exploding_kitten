@@ -104,4 +104,6 @@ yarn-error.log*
 # Backup files
 *.bak
 *.backup
+_backup/
+_docs/
 
