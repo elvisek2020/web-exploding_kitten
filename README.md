@@ -6,6 +6,8 @@ Online webová hra inspirovaná hrou "Výbušná koťátka" (Exploding Kittens) 
 
 Jednoduchá online hra pro 2-5 hráčů, kde se všichni hráči připojují do jednoho společného lobby. Hra běží v reálném čase pomocí WebSocket komunikace.
 
+![Screenshot hry](images/screen-kotatka.png)
+
 ## ✨ Funkce
 
 - ✅ Přihlášení hráčů do lobby (max 5 hráčů)
@@ -127,57 +129,7 @@ services:
     image: ghcr.io/elvisek2020/web-exploding_kitten:sha-<commit-sha>
 ```
 
-### GitHub a CI/CD
-
-#### Inicializace repozitáře
-
-1. **Vytvoření GitHub repozitáře**:
-
-   ```bash
-   # Vytvořte nový repozitář na GitHubu
-   # Název: web-exploding_kitten
-   ```
-2. **Inicializace lokálního repozitáře**:
-
-   ```bash
-   git init
-   git add .
-   git commit -m "Initial commit"
-   git branch -M main
-   git remote add origin https://github.com/elvisek2020/web-exploding_kitten.git
-   git push -u origin main
-   ```
-3. **Vytvoření GitHub Actions workflow**:
-
-   Vytvořte soubor `.github/workflows/docker.yml` - viz [příklad workflow](.github/workflows/docker.yml) v tomto repozitáři.
-4. **Nastavení viditelnosti image**:
-
-   - Po prvním buildu jděte na GitHub → Packages
-   - Najděte vytvořený package `web-exploding_kitten`
-   - V Settings → Change visibility nastavte na **Public**
-
-#### Commitování změn a automatické buildy
-
-1. **Proveďte změny v kódu**
-2. **Commit a push**:
-
-   ```bash
-   git add .
-   git commit -m "Popis změn"
-   git push origin main
-   ```
-3. **Automatický build**:
-
-   - Po push do `main` branch se automaticky spustí GitHub Actions workflow
-   - Vytvoří se Docker image pro `linux/amd64` a `linux/arm64`
-   - Image se nahraje do GHCR
-   - Taguje se jako `latest` a `sha-<commit-sha>`
-4. **Sledování buildu**:
-
-   - GitHub → Actions → zobrazí se běžící workflow
-   - Po dokončení je image dostupná na `ghcr.io/elvisek2020/web-exploding_kitten:latest`
-
-#### GitHub Container Registry (GHCR)
+### GitHub Container Registry (GHCR)
 
 Aplikace je dostupná jako Docker image z GitHub Container Registry:
 
@@ -301,24 +253,6 @@ Aplikace používá **box-style komponenty** pro konzistentní vzhled:
 - Touch-friendly ovládání
 - Chat s časem hraní a barevnými zprávami
 - Karty zobrazují pouze název - popis se zobrazí při najetí myši (desktop) nebo dlouhém tapu (mobil)
-
-### 📝 Historie změn
-
-#### v.20251228.0945
-
-- ✅ Základní implementace hry Výbušná koťátka
-- ✅ WebSocket real-time komunikace
-- ✅ Lobby systém s ready mechanikou
-- ✅ Všechny základní karty
-- ✅ Responzivní design pro mobilní zařízení
-- ✅ Zvukové efekty
-- ✅ Reconnect funkcionalita
-
-### 🐛 Známé problémy
-
-- Všechny data jsou uložena pouze v RAM (žádná persistence)
-- Karty používají placeholder obrázky (snadná výměna později)
-- Auto-reset lobby po 60 sekundách, pokud je prázdná
 
 ### 📚 Další zdroje
 
