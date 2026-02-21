@@ -89,6 +89,124 @@ header h1 {
     opacity: 0.7;
 }
 
+/* Lobby Browser */
+.lobby-browser-box {
+    min-width: 500px;
+    max-width: 600px;
+}
+
+.lobby-browser-box h2 {
+    margin-bottom: 20px;
+    color: #667eea;
+    text-align: center;
+}
+
+.lobbies-list {
+    margin-bottom: 20px;
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.no-lobbies {
+    text-align: center;
+    padding: 30px 15px;
+    color: #999;
+    font-style: italic;
+}
+
+.lobby-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 14px 16px;
+    margin: 8px 0;
+    background: #f8f9fa;
+    border-radius: 10px;
+    border: 2px solid #e9ecef;
+    transition: all 0.2s;
+}
+
+.lobby-item:hover {
+    border-color: #667eea;
+    background: #f0f2ff;
+}
+
+.lobby-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.lobby-name-text {
+    font-weight: bold;
+    font-size: 1.05em;
+    color: #333;
+    margin-bottom: 2px;
+}
+
+.lobby-details {
+    font-size: 0.85em;
+    color: #888;
+}
+
+.lobby-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+
+.lobby-join-btn {
+    width: auto !important;
+    padding: 8px 18px !important;
+    font-size: 14px !important;
+    margin: 0 !important;
+}
+
+.btn-delete-lobby {
+    width: 28px;
+    height: 28px;
+    padding: 0;
+    border: none;
+    border-radius: 6px;
+    background: #dc3545;
+    color: white;
+    font-size: 14px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.btn-delete-lobby:hover {
+    background: #c82333;
+}
+
+.create-lobby-form {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.create-lobby-form input {
+    flex: 1;
+    padding: 12px;
+    font-size: 16px;
+    border: 2px solid #ddd;
+    border-radius: 8px;
+    outline: none;
+    transition: border-color 0.3s;
+}
+
+.create-lobby-form input:focus {
+    border-color: #667eea;
+}
+
+.create-lobby-form button {
+    width: auto !important;
+    white-space: nowrap;
+}
+
 .lobby-box {
     min-width: 500px;
 }
@@ -724,6 +842,20 @@ header h1 {
         min-width: auto;
         width: 100%;
         max-width: 100%;
+    }
+
+    .lobby-browser-box {
+        min-width: auto;
+        width: 100%;
+        max-width: 100%;
+    }
+
+    .create-lobby-form {
+        flex-direction: column;
+    }
+
+    .create-lobby-form button {
+        width: 100% !important;
     }
     
     .login-box input {

@@ -7,8 +7,7 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY . .
 
-# Vytvoříme soubor s verzí buildu
-RUN python3 -c "import datetime; v = datetime.datetime.now().strftime('v.%Y%m%d.%H%M'); open('/app/static/version.json', 'w').write('{\"version\": \"' + v + '\"}')"
+# Verze se mění pouze ručně v static/version.json
 
 EXPOSE 8000
 

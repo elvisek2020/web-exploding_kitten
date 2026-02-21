@@ -51,6 +51,7 @@ class Player:
     alive: bool = True
     ready: bool = False
     is_super_power: bool = False
+    token_created_at: float = field(default_factory=time.time)
 
     def to_dict(self, hide_hand: bool = False) -> Dict[str, Any]:
         result = {
@@ -102,12 +103,19 @@ class GameSession:
         try:
             current_idx = next(i for i, p in enumerate(alive) if p.player_id == current_id)
             if self.reverse_direction:
-                # Směr dozadu
                 next_idx = (current_idx - 1) % len(alive)
             else:
-                # Směr dopředu
                 next_idx = (current_idx + 1) % len(alive)
             return alive[next_idx]
         except StopIteration:
             return alive[0] if alive else None
+
+
+@dataclass
+class Lobby:
+    lobby_id: str
+    name: str
+    session: GameSession = field(default_factory=GameSession)
+    created_at: float = field(default_factory=time.time)
+    last_activity: float = field(default_factory=time.time)
 

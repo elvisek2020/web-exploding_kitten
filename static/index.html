@@ -30,13 +30,26 @@
             </div>
         </div>
 
-        <!-- Lobby Screen -->
+        <!-- Lobby Browser Screen -->
+        <div id="lobby-browser-screen" class="screen hidden">
+            <div class="box lobby-browser-box">
+                <h2>Herní místnosti</h2>
+                <div id="lobbies-list" class="lobbies-list"></div>
+                <div class="create-lobby-form">
+                    <input type="text" id="new-lobby-name" placeholder="Název nové místnosti" maxlength="30">
+                    <button id="create-lobby-btn" class="btn-primary">Vytvořit místnost</button>
+                </div>
+                <button id="logout-btn" class="btn-secondary">Odhlásit se</button>
+            </div>
+        </div>
+
+        <!-- Lobby Screen (Room) -->
         <div id="lobby-screen" class="screen hidden">
             <div class="box lobby-box">
-                <h2>Lobby</h2>
+                <h2 id="room-title">Místnost</h2>
                 <div id="players-list" class="players-list"></div>
                 <button id="ready-btn" class="btn-primary">Připraven</button>
-                <button id="leave-btn" class="btn-secondary">Odejít</button>
+                <button id="leave-btn" class="btn-secondary">Opustit místnost</button>
                 <div id="lobby-status" class="status-message"></div>
             </div>
         </div>
@@ -44,31 +57,25 @@
         <!-- Game Screen -->
         <div id="game-screen" class="screen hidden">
             <div class="game-container">
-                <!-- Deck Info and Players Row -->
                 <div class="deck-players-row">
-                    <!-- Deck Info -->
                     <div class="box deck-info-box">
                         <h3>Balíček</h3>
                         <div id="deck-size" class="deck-size">-</div>
                     </div>
-                    
-                    <!-- Players -->
                     <div id="players-container" class="players-container"></div>
                 </div>
 
-                <!-- Actions -->
                 <div class="box actions-box">
                     <button id="draw-card-btn" class="btn-primary">Líznout kartu</button>
                     <button id="restart-game-btn" class="btn-primary hidden">Začít novou hru</button>
+                    <button id="leave-room-btn" class="btn-secondary hidden">Zpět do místností</button>
                 </div>
 
-                <!-- Messages (Chat) - uprostřed -->
                 <div class="box messages-box">
                     <h3>Chat</h3>
                     <div id="game-messages" class="messages"></div>
                 </div>
 
-                <!-- My Hand (Karty) - dole -->
                 <div class="box hand-box">
                     <h3>Tvoje karty</h3>
                     <div id="my-hand" class="hand"></div>
@@ -101,4 +108,3 @@
     <script src="/static/app.js"></script>
 </body>
 </html>
-

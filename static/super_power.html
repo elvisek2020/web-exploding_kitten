@@ -25,18 +25,31 @@
                 <button id="join-btn" class="btn-primary">Přihlásit</button>
                 <div id="login-error" class="error-message"></div>
                 <div style="text-align: center; margin-top: 15px; font-size: 0.9em;">
-                    <a href="/" style="color: #667eea; text-decoration: none; opacity: 0.7;">← Normální přihlášení</a>
+                    <a href="/" style="color: #667eea; text-decoration: none; opacity: 0.7;">&larr; Normální přihlášení</a>
                 </div>
             </div>
         </div>
 
-        <!-- Lobby Screen -->
+        <!-- Lobby Browser Screen -->
+        <div id="lobby-browser-screen" class="screen hidden">
+            <div class="box lobby-browser-box">
+                <h2>Herní místnosti (Admin)</h2>
+                <div id="lobbies-list" class="lobbies-list"></div>
+                <div class="create-lobby-form">
+                    <input type="text" id="new-lobby-name" placeholder="Název nové místnosti" maxlength="30">
+                    <button id="create-lobby-btn" class="btn-primary">Vytvořit místnost</button>
+                </div>
+                <button id="logout-btn" class="btn-secondary">Odhlásit se</button>
+            </div>
+        </div>
+
+        <!-- Lobby Screen (Room) -->
         <div id="lobby-screen" class="screen hidden">
             <div class="box lobby-box">
-                <h2>Lobby (Super Power)</h2>
+                <h2 id="room-title">Místnost (Super Power)</h2>
                 <div id="players-list" class="players-list"></div>
                 <button id="ready-btn" class="btn-primary">Připraven</button>
-                <button id="leave-btn" class="btn-secondary">Odejít</button>
+                <button id="leave-btn" class="btn-secondary">Opustit místnost</button>
                 <div id="lobby-status" class="status-message"></div>
             </div>
         </div>
@@ -44,37 +57,31 @@
         <!-- Game Screen -->
         <div id="game-screen" class="screen hidden">
             <div class="game-container">
-                <!-- Deck Info and Players Row -->
                 <div class="deck-players-row">
-                    <!-- Deck Info -->
                     <div class="box deck-info-box">
                         <h3>Balíček</h3>
                         <div id="deck-size" class="deck-size">-</div>
                     </div>
-                    
-                    <!-- Players -->
                     <div id="players-container" class="players-container"></div>
                 </div>
 
-                <!-- Actions -->
                 <div class="box actions-box">
                     <button id="draw-card-btn" class="btn-primary">Líznout kartu</button>
                     <button id="restart-game-btn" class="btn-primary hidden">Začít novou hru</button>
+                    <button id="leave-room-btn" class="btn-secondary hidden">Zpět do místností</button>
                 </div>
 
-                <!-- Messages (Chat) - uprostřed -->
                 <div class="box messages-box">
                     <h3>Chat</h3>
                     <div id="game-messages" class="messages"></div>
                 </div>
 
-                <!-- My Hand (Karty) - dole -->
                 <div class="box hand-box">
                     <h3>Tvoje karty</h3>
                     <div id="my-hand" class="hand"></div>
                 </div>
 
-                <!-- Super Power Actions - úplně dole -->
+                <!-- Super Power Actions -->
                 <div class="box super-power-box hidden">
                     <h3>Super Power - Administrace</h3>
                     <div style="display: flex; gap: 10px; flex-wrap: nowrap; align-items: center;">
@@ -113,255 +120,113 @@
         </div>
     </div>
 
+    <!-- Explosion Effect Overlay -->
+    <div id="explosion-overlay" class="explosion-overlay"></div>
+
     <script src="/static/app.js"></script>
     <script>
-        // Přidáme event listener pro refresh na nadpis
-        document.addEventListener('DOMContentLoaded', () => {
-            const mainTitle = document.getElementById('main-title');
-            if (mainTitle) {
-                mainTitle.addEventListener('click', () => {
-                    window.location.reload();
-                });
-            }
-        });
-        
-        // Super Power režim - rozšíření app.js
         let isSuperPower = false;
-        
-        // Upravíme join handler, aby posílal heslo
-        document.addEventListener('DOMContentLoaded', () => {
-            const joinBtn = document.getElementById('join-btn');
-            const originalHandler = joinBtn.onclick;
-            joinBtn.onclick = null;
-            
-            joinBtn.addEventListener('click', async () => {
-                const nameInput = document.getElementById('player-name');
-                const passwordInput = document.getElementById('player-password');
-                
-                if (!nameInput || !passwordInput) return;
-                
-                const name = nameInput.value.trim();
-                const password = passwordInput.value.trim();
-                
-                if (!name) {
-                    showError('Zadej jméno');
-                    return;
-                }
-                
-                if (!password) {
-                    showError('Zadej heslo');
-                    return;
-                }
-                
-                sessionStorage.setItem('player_name', name);
-                sessionStorage.setItem('super_power_password', password);
-                window.pendingJoinName = name;
-                window.pendingJoinPassword = password;
-                
-                if (!ws || ws.readyState !== WebSocket.OPEN) {
-                    connectWebSocket();
-                } else {
-                    ws.send(JSON.stringify({ type: 'join', name: name, password: password }));
-                }
-            });
-            
-            // Upravíme connectWebSocket, aby posílal heslo
-            const originalConnectWebSocket = window.connectWebSocket;
-            window.connectWebSocket = function() {
-                const ws = originalConnectWebSocket();
-                if (ws && ws.onopen) {
-                    const originalOnOpen = ws.onopen;
-                    ws.onopen = function(event) {
-                        originalOnOpen.call(this, event);
-                        // Pokud máme pendingJoinPassword, pošleme join s heslem
-                        if (window.pendingJoinPassword) {
-                            const name = window.pendingJoinName || '';
-                            const password = window.pendingJoinPassword;
-                            console.log('DEBUG Super Power: Posílám join s heslem');
-                            ws.send(JSON.stringify({ type: 'join', name: name, password: password }));
-                            window.pendingJoinPassword = null;
-                        } else if (window.pendingJoinName && !token) {
-                            // Pokud nemáme heslo, ale máme jméno, zkusíme z inputu
-                            const passwordInput = document.getElementById('player-password');
-                            if (passwordInput && passwordInput.value.trim()) {
-                                const name = window.pendingJoinName;
-                                const password = passwordInput.value.trim();
-                                console.log('DEBUG Super Power: Posílám join s heslem z inputu');
-                                ws.send(JSON.stringify({ type: 'join', name: name, password: password }));
-                            }
-                        }
-                    };
-                }
-                return ws;
-            };
-        });
-        
-        // Rozšíříme updateLobby pro zobrazení tlačítka "Odebrat"
-        const originalUpdateLobby = window.updateLobby;
+
+        // Override lobby update to show remove buttons for admin
+        const _origUpdateLobby = window.updateLobby;
         window.updateLobby = function(state) {
-            originalUpdateLobby.call(this, state);
-            
+            _origUpdateLobby.call(this, state);
+
             const myPlayer = state.players.find(p => p.player_id === playerId);
             if (myPlayer && myPlayer.is_super_power) {
                 isSuperPower = true;
-                
-                const playersList = document.getElementById('players-list');
-                if (playersList) {
-                    const playerItems = playersList.querySelectorAll('.player-item');
-                    playerItems.forEach(item => {
-                        const playerNameSpan = item.querySelector('.player-name');
-                        if (playerNameSpan) {
-                            const playerName = playerNameSpan.textContent.trim();
-                            const player = state.players.find(p => p.name === playerName && p.player_id !== playerId);
-                            // Super_power uživatelé nemohou být odstraněni
-                            if (player && !player.is_super_power && !item.querySelector('.remove-player-btn')) {
-                                const removeBtn = document.createElement('button');
-                                removeBtn.className = 'remove-player-btn btn-secondary';
-                                removeBtn.textContent = '✕';
-                                removeBtn.style.cssText = 'width: 20px; height: 20px; padding: 0; font-size: 0.9em; margin-right: 8px; display: flex; align-items: center; justify-content: center;';
-                                removeBtn.addEventListener('click', (e) => {
-                                    e.stopPropagation();
-                                    if (ws && ws.readyState === WebSocket.OPEN) {
-                                        ws.send(JSON.stringify({
-                                            type: 'remove_player',
-                                            target_player_id: player.player_id
-                                        }));
-                                    }
-                                });
-                                // Přidáme tlačítko na začátek levého kontejneru
-                                const leftContainer = item.querySelector('.player-item-left');
-                                if (leftContainer) {
-                                    leftContainer.insertBefore(removeBtn, leftContainer.firstChild);
-                                } else {
-                                    // Fallback - pokud kontejner neexistuje, přidáme na začátek itemu
-                                    item.insertBefore(removeBtn, item.firstChild);
-                                }
+                const list = document.getElementById('players-list');
+                if (!list) return;
+                const items = list.querySelectorAll('.player-item');
+                items.forEach(item => {
+                    const nameSpan = item.querySelector('.player-name');
+                    if (!nameSpan) return;
+                    const pName = nameSpan.textContent.trim();
+                    const p = state.players.find(x => x.name === pName && x.player_id !== playerId);
+                    if (p && !p.is_super_power && !item.querySelector('.remove-player-btn')) {
+                        const btn = document.createElement('button');
+                        btn.className = 'remove-player-btn btn-secondary';
+                        btn.textContent = '✕';
+                        btn.addEventListener('click', (e) => {
+                            e.stopPropagation();
+                            if (ws?.readyState === WebSocket.OPEN) {
+                                ws.send(JSON.stringify({ type: 'remove_player', target_player_id: p.player_id }));
                             }
-                        }
-                    });
-                }
+                        });
+                        const left = item.querySelector('.player-item-left');
+                        if (left) left.insertBefore(btn, left.firstChild);
+                        else item.insertBefore(btn, item.firstChild);
+                    }
+                });
             }
         };
-        
-        // Přidáme handler pro end_game tlačítko
-        document.addEventListener('DOMContentLoaded', () => {
-            const endGameBtn = document.getElementById('end-game-btn');
-            if (endGameBtn) {
-                endGameBtn.addEventListener('click', () => {
-                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                    if (!isSuperPower) return;
-                    
-                    if (confirm('Opravdu chcete ukončit hru předčasně?')) {
-                        ws.send(JSON.stringify({ type: 'end_game' }));
-                    }
-                });
-            }
-            
-            // Přidáme handler pro zobrazení balíčku
-            const viewDeckBtn = document.getElementById('view-deck-btn');
-            if (viewDeckBtn) {
-                viewDeckBtn.addEventListener('click', () => {
-                    if (!ws || ws.readyState !== WebSocket.OPEN) return;
-                    if (!isSuperPower) return;
-                    
-                    ws.send(JSON.stringify({ type: 'view_deck' }));
-                });
-            }
-            
-            // Přidáme handler pro zavření modalu balíčku
-            const closeDeckModalBtn = document.getElementById('close-deck-modal-btn');
-            if (closeDeckModalBtn) {
-                closeDeckModalBtn.addEventListener('click', () => {
-                    const modal = document.getElementById('view-deck-modal');
-                    if (modal) {
-                        modal.classList.remove('show');
-                    }
-                });
-            }
-        });
-        
-        // Zobrazíme box "Ukončit hru" pouze pro super_power
-        const originalUpdateGame = window.updateGame;
+
+        // Override game update to show admin panel
+        const _origUpdateGame = window.updateGame;
         window.updateGame = function(state) {
-            originalUpdateGame.call(this, state);
-            
-            const superPowerBox = document.querySelector('.super-power-box');
-            if (superPowerBox) {
-                const myPlayer = state.players.find(p => p.player_id === playerId);
-                if (myPlayer && myPlayer.is_super_power && state.status === 'playing') {
-                    superPowerBox.classList.remove('hidden');
+            _origUpdateGame.call(this, state);
+            const box = document.querySelector('.super-power-box');
+            if (box) {
+                const mp = state.players.find(p => p.player_id === playerId);
+                if (mp && mp.is_super_power && state.status === 'playing') {
+                    box.classList.remove('hidden');
                 } else {
-                    superPowerBox.classList.add('hidden');
+                    box.classList.add('hidden');
                 }
             }
         };
-        
-        // Funkce pro zobrazení balíčku v modalu
+
+        // Deck modal for admin
         function showDeckModal(cards) {
             const modal = document.getElementById('view-deck-modal');
-            const cardsDiv = document.getElementById('deck-cards');
-            if (!modal || !cardsDiv) return;
-            
-            cardsDiv.innerHTML = '';
-            
-            if (cards.length === 0) {
-                cardsDiv.innerHTML = '<p>Balíček je prázdný</p>';
-                modal.classList.add('show');
-                return;
-            }
-            
-            cards.forEach(card => {
-                const cardDiv = document.createElement('div');
-                const cardTypeClass = `card-type-${card.type.toLowerCase()}`;
-                cardDiv.className = `card ${cardTypeClass}`;
-                
-                if (card.asset_path) {
-                    cardDiv.style.backgroundImage = `url(${card.asset_path})`;
-                    cardDiv.style.backgroundSize = 'cover';
-                    cardDiv.style.backgroundPosition = 'center';
-                    cardDiv.style.backgroundRepeat = 'no-repeat';
-                    cardDiv.classList.add('has-image');
+            const div = document.getElementById('deck-cards');
+            if (!modal || !div) return;
+            div.innerHTML = '';
+            if (cards.length === 0) { div.innerHTML = '<p>Balíček je prázdný</p>'; modal.classList.add('show'); return; }
+            cards.forEach(c => {
+                const cd = document.createElement('div');
+                cd.className = `card card-type-${c.type.toLowerCase()}`;
+                if (c.asset_path) {
+                    cd.style.backgroundImage = `url(${c.asset_path})`;
+                    cd.style.backgroundSize = 'cover';
+                    cd.style.backgroundPosition = 'center';
+                    cd.classList.add('has-image');
                 }
-                
-                cardDiv.innerHTML = `
-                    <div class="card-title">${escapeHtml(card.title)}</div>
-                    <div class="card-description">${escapeHtml(card.description)}</div>
-                `;
-                
-                cardsDiv.appendChild(cardDiv);
+                cd.innerHTML = `<div class="card-title">${escapeHtml(c.title)}</div>`;
+                div.appendChild(cd);
             });
-            
             modal.classList.add('show');
         }
-        
-        // Přidáme handler pro player_removed a you_were_removed zprávy
-        const originalHandleMessage = window.handleMessage;
-        window.handleMessage = function(message) {
-            if (message.type === 'player_removed') {
-                addMessage(`Hráč ${message.player_name} byl odebrán z lobby`, 'info');
-            } else if (message.type === 'you_were_removed') {
-                // Hráč byl odebrán - přesměrujeme ho na login stránku
-                sessionStorage.removeItem('token');
-                sessionStorage.removeItem('player_id');
-                playerId = null;
-                token = null;
-                
-                // Zavřeme WebSocket explicitně
-                if (ws) {
-                    ws.onclose = null;
-                    ws.close();
-                    ws = null;
+
+        // Admin button handlers
+        document.addEventListener('DOMContentLoaded', () => {
+            document.getElementById('end-game-btn')?.addEventListener('click', () => {
+                if (!ws || ws.readyState !== WebSocket.OPEN || !isSuperPower) return;
+                if (confirm('Opravdu chcete ukončit hru předčasně?')) {
+                    ws.send(JSON.stringify({ type: 'end_game' }));
                 }
-                
-                showScreen('login-screen');
-                showError(message.message || 'Byli jste odebráni z lobby');
-            } else if (message.type === 'deck_view') {
-                // Zobrazení balíčku pro super_power
+            });
+
+            document.getElementById('view-deck-btn')?.addEventListener('click', () => {
+                if (!ws || ws.readyState !== WebSocket.OPEN || !isSuperPower) return;
+                ws.send(JSON.stringify({ type: 'view_deck' }));
+            });
+
+            document.getElementById('close-deck-modal-btn')?.addEventListener('click', () => {
+                const m = document.getElementById('view-deck-modal');
+                if (m) m.classList.remove('show');
+            });
+        });
+
+        // Override handleMessage for admin-specific messages
+        const _origHandleMessage = window.handleMessage;
+        window.handleMessage = function(message) {
+            if (message.type === 'deck_view') {
                 showDeckModal(message.cards || []);
+                return;
             }
-            return originalHandleMessage.call(this, message);
+            _origHandleMessage.call(this, message);
         };
     </script>
 </body>
 </html>
-
