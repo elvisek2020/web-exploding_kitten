@@ -142,7 +142,16 @@ def initialize_game(session: GameSession) -> None:
     logger.info("Game initialized with %d players", num_players)
 
 
-def draw_card(session: GameSession, player: Player) -> Optional[Card]:
+def draw_card(session: GameSession, player: Player) -> Dict[str, Any]:
+    """Lízne kartu. Vrací rozlišený výsledek:
+    {"card": Card}                    - normální líznutí
+    {"card": Card, "exploded": True}  - výbuch (hráč umírá)
+    {"defused": True}                 - koťátko zneškodněno
+    {"empty": True}                   - není co líznout
+    """
+    # Líznutí uzavírá okno pro NOPE - poslední akce už nejde zrušit
+    session.last_action_for_nope = None
+
     if session.peeked_cards:
         card = session.peeked_cards.pop(0)
         for i, c in enumerate(session.draw_pile):
@@ -157,7 +166,7 @@ def draw_card(session: GameSession, player: Player) -> Optional[Card]:
                 random.shuffle(session.draw_pile)
                 session.peeked_cards = []
             else:
-                return None
+                return {"empty": True}
         card = session.draw_pile.pop(0)
 
     if card.type == CardType.EXPLODING_KITTEN:
@@ -165,17 +174,19 @@ def draw_card(session: GameSession, player: Player) -> Optional[Card]:
         if defuse_idx is not None:
             player.hand.pop(defuse_idx)
             session.draw_pile.insert(random.randint(0, len(session.draw_pile)), card)
+            # Koťátko se vrátilo na neznámou pozici - dřívější peek už neplatí
+            session.peeked_cards = []
             logger.info("Player %s defused Exploding Kitten", player.name)
-            return None
+            return {"defused": True}
         else:
             player.alive = False
             if player.player_id in session.pending_turns:
                 del session.pending_turns[player.player_id]
             logger.info("Player %s died from Exploding Kitten", player.name)
-            return card
+            return {"card": card, "exploded": True}
 
     player.hand.append(card)
-    return card
+    return {"card": card}
 
 
 # ---------------------------------------------------------------------------
@@ -226,6 +237,12 @@ def _cancel_action_effects(session: GameSession, action: dict) -> dict:
     elif card_type == "SEE_FUTURE":
         session.peeked_cards = []
 
+    elif card_type == "SHUFFLE" and effect:
+        old_order = effect.get("old_order")
+        if old_order is not None:
+            session.draw_pile = list(old_order)
+        session.peeked_cards = []
+
     elif card_type == "REVERSE" and effect:
         session.reverse_direction = effect.get("old_direction", False)
 
@@ -267,6 +284,12 @@ def _reapply_action_effects(session: GameSession, action: dict) -> dict:
         n = min(effect.get("peeked_count", 3), len(session.draw_pile))
         session.peeked_cards = session.draw_pile[:n].copy()
 
+    elif card_type == "SHUFFLE" and effect:
+        new_order = effect.get("new_order")
+        if new_order is not None:
+            session.draw_pile = list(new_order)
+        session.peeked_cards = []
+
     elif card_type == "REVERSE" and effect:
         session.reverse_direction = effect.get("new_direction", True)
         result["end_turn"] = True
@@ -287,6 +310,23 @@ def play_card(session: GameSession, player: Player, card_id: str,
 
     if card.type == CardType.DEFUSE:
         return {"error": "Zneškodni nelze normálně zahrat. Používá se automaticky při líznutí výbušného koťátka."}
+
+    # Validace specifické pro typ karty PŘED odebráním z ruky,
+    # aby se karta při chybě "nespálila".
+    if card.type == CardType.FAVOR:
+        if not target_player_id:
+            return {"error": "FAVOR vyžaduje cílového hráče"}
+        favor_target = session.get_player(target_player_id)
+        if not favor_target or not favor_target.alive or len(favor_target.hand) == 0:
+            return {"error": "Neplatný cíl pro FAVOR"}
+        if all(c.type == CardType.EXPLODING_KITTEN for c in favor_target.hand):
+            return {"error": "Protihráč má pouze výbušná koťátka, nelze vzít kartu"}
+
+    if card.type == CardType.NOPE:
+        if not session.last_action_for_nope:
+            return {"error": "Není žádná akce k zrušení"}
+        if session.last_action_for_nope.get("card_type") == "DEFUSE":
+            return {"error": "Nené nelze použít na kartu Zneškodni"}
 
     card = player.hand.pop(card_idx)
     session.discard_pile.append(card)
@@ -323,9 +363,15 @@ def play_card(session: GameSession, player: Player, card_id: str,
 
     # ----- SHUFFLE -----
     elif card.type == CardType.SHUFFLE:
+        old_order = session.draw_pile.copy()
         random.shuffle(session.draw_pile)
         session.peeked_cards = []
         result["message"] = "Balíček byl zamíchán"
+        # Uložené pořadí umožňuje NOPE zamíchání skutečně vrátit
+        result["shuffle_effect"] = {
+            "old_order": old_order,
+            "new_order": session.draw_pile.copy(),
+        }
 
     # ----- SEE FUTURE -----
     elif card.type == CardType.SEE_FUTURE:
@@ -344,16 +390,10 @@ def play_card(session: GameSession, player: Player, card_id: str,
         result["see_future_cards"] = display
         result["see_future_effect"] = {"peeked_count": len(top)}
 
-    # ----- FAVOR -----
+    # ----- FAVOR (cíl už zvalidován výše) -----
     elif card.type == CardType.FAVOR:
-        if not target_player_id:
-            return {"error": "FAVOR vyžaduje cílového hráče"}
         target = session.get_player(target_player_id)
-        if not target or not target.alive or len(target.hand) == 0:
-            return {"error": "Neplatný cíl pro FAVOR"}
         available = [c for c in target.hand if c.type != CardType.EXPLODING_KITTEN]
-        if not available:
-            return {"error": "Protihráč má pouze výbušná koťátka, nelze vzít kartu"}
         rc = random.choice(available)
         target.hand.remove(rc)
         player.hand.append(rc)
@@ -376,16 +416,9 @@ def play_card(session: GameSession, player: Player, card_id: str,
         }
         result["message"] = f"Směr tahu změněn na {'dozadu' if session.reverse_direction else 'dopředu'}"
 
-    # ----- NOPE (with double-NOPE chain support) -----
+    # ----- NOPE (with double-NOPE chain support; existence akce zvalidována výše) -----
     elif card.type == CardType.NOPE:
-        if not session.last_action_for_nope:
-            result["error"] = "Není žádná akce k zrušení"
-            return result
-
         last = session.last_action_for_nope
-
-        if last.get("card_type") == "DEFUSE":
-            return {"error": "Nené nelze použít na kartu Zneškodni"}
 
         if last.get("card_type") == "NOPE":
             # Double-NOPE chain: toggle state of original action
@@ -437,7 +470,7 @@ def play_card(session: GameSession, player: Player, card_id: str,
             "card_id": card.id,
             "effect": (result.get("attack_effect") or result.get("skip_effect")
                        or result.get("favor_effect") or result.get("see_future_effect")
-                       or result.get("reverse_effect")),
+                       or result.get("reverse_effect") or result.get("shuffle_effect")),
         }
 
     return result

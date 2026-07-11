@@ -41,6 +41,9 @@ MAX_LOBBIES = int(os.environ.get("MAX_LOBBIES", "10"))
 MAX_LOBBY_NAME_LENGTH = int(os.environ.get("MAX_LOBBY_NAME_LENGTH", "30"))
 LOBBY_INACTIVITY_TIMEOUT = int(os.environ.get("LOBBY_INACTIVITY_TIMEOUT", "1800"))  # 30 min
 WS_HEARTBEAT_TIMEOUT = int(os.environ.get("WS_HEARTBEAT_TIMEOUT", "45"))  # seconds
+DISCONNECT_GRACE_SECONDS = int(os.environ.get("DISCONNECT_GRACE_SECONDS", "120"))
+MAX_REGISTERED_PLAYERS = int(os.environ.get("MAX_REGISTERED_PLAYERS", "200"))
+REGISTRY_DISCONNECT_TTL = 300  # sekundy, po kterých se uklidí registrace hráče bez spojení a mimo lobby
 
 
 # ---------------------------------------------------------------------------
@@ -94,6 +97,8 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 lobbies: Dict[str, Lobby] = {}
 connected_clients: Dict[str, WebSocket] = {}
 player_last_activity: Dict[str, float] = {}
+# player_id -> čas odpojení během běžící hry (grace period pro reconnect)
+disconnected_at: Dict[str, float] = {}
 
 # player_id -> {name, token, is_super_power, token_created_at, lobby_id}
 player_registry: Dict[str, dict] = {}
@@ -235,8 +240,6 @@ async def send_room_state(lobby: Lobby, target_player_id: Optional[str] = None):
 
 async def send_game_state(lobby: Lobby):
     for player in lobby.session.players:
-        if (not player.hand or len(player.hand) == 0) and player.alive:
-            continue
         ws = connected_clients.get(player.player_id)
         if not ws:
             continue
@@ -255,8 +258,6 @@ async def send_game_state(lobby: Lobby):
                 "players": [],
             }
             for p in lobby.session.players:
-                if (not p.hand or len(p.hand) == 0) and p.alive:
-                    continue
                 hide = p.player_id != player.player_id
                 state["players"].append(p.to_dict(hide_hand=hide))
             await ws.send_json(state)
@@ -309,8 +310,13 @@ async def periodic_cleanup():
         stale_players = [
             pid for pid, info in list(player_registry.items())
             if pid not in connected_clients
-            and _is_token_expired(info)
             and not info.get("lobby_id")
+            and (
+                _is_token_expired(info)
+                # Odpojen bez lobby déle než TTL - nečekat na expiraci tokenu,
+                # ať se neblokují jména a neplní paměť
+                or now - info.get("disconnected_at", now) > REGISTRY_DISCONNECT_TTL
+            )
         ]
         for pid in stale_players:
             t = player_registry.pop(pid, {}).get("token")
@@ -327,11 +333,14 @@ async def _force_disconnect_player(pid: str) -> None:
     """
     ws = connected_clients.pop(pid, None)
     player_last_activity.pop(pid, None)
+    disconnected_at.pop(pid, None)
 
     info = player_registry.get(pid)
     if not info:
         logger.info("_force_disconnect: pid=%s not in registry, skip", pid)
         return
+
+    info["disconnected_at"] = time.time()
 
     pname = info.get("name", "?")
     lobby_id = info.get("lobby_id")
@@ -379,9 +388,42 @@ async def _force_disconnect_player(pid: str) -> None:
             pass
 
 
+async def _handle_connection_lost(pid: str) -> None:
+    """Called when a player's connection drops (socket closed or heartbeat
+    expired).  If the player is in a running game, keep them in the session
+    for DISCONNECT_GRACE_SECONDS so they can reconnect; otherwise remove
+    them immediately via _force_disconnect_player."""
+    info = player_registry.get(pid)
+    lobby = _get_player_lobby(pid)
+    player = lobby.session.get_player(pid) if lobby else None
+
+    if (info and lobby and player
+            and lobby.session.status == GameStatus.PLAYING
+            and player.alive):
+        ws = connected_clients.pop(pid, None)
+        player_last_activity.pop(pid, None)
+        disconnected_at[pid] = time.time()
+        info["disconnected_at"] = time.time()
+        player.connected = False
+        logger.info(
+            "Player %s (%s) disconnected during game, grace period %ds",
+            info.get("name", "?"), pid, DISCONNECT_GRACE_SECONDS,
+        )
+        if ws:
+            try:
+                await ws.close(code=4000)
+            except Exception:
+                pass
+        await send_game_state(lobby)
+        await send_room_state(lobby)
+    else:
+        await _force_disconnect_player(pid)
+
+
 async def monitor_heartbeats():
     """Periodically check for players who stopped sending pings and
-    force-disconnect them.  This runs independently of the per-connection
+    handle their disconnect.  Also removes players whose reconnect grace
+    period expired.  This runs independently of the per-connection
     receive loop and does not rely on WebSocket close detection."""
     while True:
         await asyncio.sleep(10)
@@ -392,11 +434,27 @@ async def monitor_heartbeats():
         ]
         for pid in stale:
             pname = player_registry.get(pid, {}).get("name", "?")
-            logger.info("Heartbeat expired: player=%s (%s), forcing disconnect", pid, pname)
+            logger.info("Heartbeat expired: player=%s (%s), handling disconnect", pid, pname)
+            try:
+                await _handle_connection_lost(pid)
+            except Exception:
+                logger.exception("Error in heartbeat disconnect for %s", pid)
+
+        expired = [
+            pid for pid, t in list(disconnected_at.items())
+            if now - t > DISCONNECT_GRACE_SECONDS
+        ]
+        for pid in expired:
+            if pid in connected_clients:
+                # Hráč se mezitím vrátil, jen zapomenutý záznam
+                disconnected_at.pop(pid, None)
+                continue
+            pname = player_registry.get(pid, {}).get("name", "?")
+            logger.info("Reconnect grace expired: player=%s (%s), removing from game", pid, pname)
             try:
                 await _force_disconnect_player(pid)
             except Exception:
-                logger.exception("Error in heartbeat disconnect for %s", pid)
+                logger.exception("Error in grace-expiry disconnect for %s", pid)
 
 
 # ---------------------------------------------------------------------------
@@ -423,7 +481,9 @@ app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
-    allow_credentials=True,
+    # Aplikace nepoužívá cookies ani credentials; kombinace "*" origin
+    # + allow_credentials=True je nebezpečný vzor
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
@@ -515,9 +575,17 @@ async def websocket_endpoint(websocket: WebSocket):
             # JOIN (authenticate, show lobby browser)
             # ==============================================================
             if msg_type == "join":
+                if player_id:
+                    await websocket.send_json({"type": "error", "message": "Již jste přihlášeni"})
+                    continue
+
                 name = str(data.get("name", "")).strip()
                 password = str(data.get("password", "")).strip()
                 is_super_power = False
+
+                if len(player_registry) >= MAX_REGISTERED_PLAYERS:
+                    await websocket.send_json({"type": "error", "message": "Server je plný, zkuste to později"})
+                    continue
 
                 if not name:
                     await websocket.send_json({"type": "error", "message": "Jméno je povinné"})
@@ -581,6 +649,8 @@ async def websocket_endpoint(websocket: WebSocket):
                 player_id = rec_pid
                 connected_clients[player_id] = websocket
                 player_last_activity[player_id] = time.time()
+                disconnected_at.pop(player_id, None)
+                info.pop("disconnected_at", None)
                 logger.info("Player reconnected: %s (id=%s)", info["name"], player_id)
 
                 await websocket.send_json({
@@ -592,14 +662,16 @@ async def websocket_endpoint(websocket: WebSocket):
                 lobby_id = info.get("lobby_id")
                 if lobby_id and lobby_id in lobbies:
                     lobby = lobbies[lobby_id]
+                    rec_player = lobby.session.get_player(player_id)
+                    if rec_player:
+                        rec_player.connected = True
                     await websocket.send_json({
                         "type": "lobby_joined",
                         "lobby_id": lobby.lobby_id,
                         "lobby_name": lobby.name,
                     })
                     if lobby.session.status == GameStatus.PLAYING:
-                        player = lobby.session.get_player(player_id)
-                        if player and player.hand:
+                        if rec_player:
                             await send_game_state(lobby)
                         else:
                             await send_room_state(lobby, target_player_id=player_id)
@@ -951,9 +1023,13 @@ async def websocket_endpoint(websocket: WebSocket):
                     continue
 
                 _touch_lobby(lobby)
-                card = draw_card(session, player)
+                draw_result = draw_card(session, player)
 
-                if card and card.type.value == "EXPLODING_KITTEN":
+                if draw_result.get("empty"):
+                    # Podle pravidel se balíček nikdy nevyčerpá; kdyby přesto,
+                    # nesmí se to tvářit jako zneškodnění koťátka.
+                    await websocket.send_json({"type": "error", "message": "Balíček je prázdný"})
+                elif draw_result.get("exploded"):
                     await broadcast_to_lobby(lobby, {
                         "type": "player_died",
                         "player_id": player_id,
@@ -983,32 +1059,16 @@ async def websocket_endpoint(websocket: WebSocket):
                                 p.ready = False
                     await send_game_state(lobby)
                 else:
-                    if card:
-                        await websocket.send_json({"type": "card_drawn", "card": card.to_dict()})
-                    else:
+                    if draw_result.get("defused"):
                         await broadcast_to_lobby(lobby, {
                             "type": "exploding_kitten_defused",
                             "player_id": player_id,
                             "player_name": player.name,
                         })
+                    else:
+                        await websocket.send_json({"type": "card_drawn", "card": draw_result["card"].to_dict()})
                     end_turn(session)
                     await send_game_state(lobby)
-
-            # ==============================================================
-            # END TURN
-            # ==============================================================
-            elif msg_type == "end_turn":
-                if not player_id:
-                    await websocket.send_json({"type": "error", "message": "Nejste přihlášeni"})
-                    continue
-                lobby = _get_player_lobby(player_id)
-                if not lobby:
-                    continue
-                session = lobby.session
-                if session.status != GameStatus.PLAYING or session.current_player_id != player_id:
-                    continue
-                end_turn(session)
-                await send_game_state(lobby)
 
             # ==============================================================
             # RESTART GAME
@@ -1021,6 +1081,10 @@ async def websocket_endpoint(websocket: WebSocket):
                 lobby = _get_player_lobby(player_id)
                 if not lobby:
                     await websocket.send_json({"type": "error", "message": "Nejste v žádné místnosti"})
+                    continue
+
+                if lobby.session.status != GameStatus.FINISHED:
+                    await websocket.send_json({"type": "error", "message": "Novou hru lze začít až po skončení té současné"})
                     continue
 
                 _touch_lobby(lobby)
@@ -1205,11 +1269,11 @@ async def websocket_endpoint(websocket: WebSocket):
         if player_id:
             current_ws = connected_clients.get(player_id)
             if current_ws is websocket:
-                logger.info("Finally cleanup: calling _force_disconnect for player=%s", player_id)
+                logger.info("Finally cleanup: handling connection lost for player=%s", player_id)
                 try:
-                    await _force_disconnect_player(player_id)
+                    await _handle_connection_lost(player_id)
                 except Exception as cleanup_err:
-                    logger.error("Error in _force_disconnect_player: %s", cleanup_err, exc_info=True)
+                    logger.error("Error in _handle_connection_lost: %s", cleanup_err, exc_info=True)
             else:
                 already_gone = current_ws is None
                 logger.info(

@@ -51,6 +51,7 @@ class Player:
     alive: bool = True
     ready: bool = False
     is_super_power: bool = False
+    connected: bool = True
     token_created_at: float = field(default_factory=time.time)
 
     def to_dict(self, hide_hand: bool = False) -> Dict[str, Any]:
@@ -60,7 +61,8 @@ class Player:
             "alive": self.alive,
             "ready": self.ready,
             "hand_size": len(self.hand),
-            "is_super_power": self.is_super_power
+            "is_super_power": self.is_super_power,
+            "connected": self.connected
         }
         if not hide_hand:
             # DŮLEŽITÉ: Výbušné koťátko se NESMÍ zobrazit v ruce - filtrujeme ho

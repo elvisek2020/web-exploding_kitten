@@ -494,6 +494,7 @@ function updatePlayers(players, currentPlayerId, pendingTurns) {
             ${turnsDisplay ? `<div class="player-turns" style="font-size:0.85em;color:#667eea;margin-top:4px;">${turnsDisplay}</div>` : ''}
             <div class="hand-size">Karet: ${player.hand_size}</div>
             ${!player.alive ? '<div style="color:red;margin-top:5px;">Mrtvý</div>' : ''}
+            ${player.alive && player.connected === false ? '<div style="color:#ff9800;margin-top:5px;">Odpojen</div>' : ''}
         `;
         container.appendChild(div);
     });
