@@ -203,16 +203,17 @@ function handleMessage(message) {
             break;
         }
 
-        case 'card_played':
-            addMessage(`${message.player_name} zahrál kartu ${getCardTypeName(message.card_type)}`, 'success');
+        case 'card_played': {
+            const cardOwner = message.player_id === playerId ? 'own' : 'other';
+            addMessage(`${message.player_name} zahrál kartu ${getCardTypeName(message.card_type)}`, 'success', cardOwner);
             if (message.result?.see_future_cards && message.player_id === playerId) {
                 showSeeFutureModal(message.result.see_future_cards);
             }
             if (message.result?.favor_card && message.player_id === playerId) {
-                addMessage(`✅ Dostal jsi kartu: ${message.result.favor_card.title}`, 'success');
+                addMessage(`✅ Dostal jsi kartu: ${message.result.favor_card.title}`, 'success', 'own');
             }
             if (message.result?.action_restored) {
-                addMessage(`↩️ Akce ${getCardTypeName(message.result.original_card_type || '')} byla obnovena!`, 'success');
+                addMessage(`↩️ Akce ${getCardTypeName(message.result.original_card_type || '')} byla obnovena!`, 'success', cardOwner);
             }
             if (currentGameState) {
                 currentGameState.can_nope = message.can_nope || false;
@@ -220,9 +221,10 @@ function handleMessage(message) {
                 if (mp) updateMyHand(mp.hand || [], currentGameState.current_player_id === playerId, currentGameState.can_nope);
             }
             break;
+        }
 
         case 'player_died':
-            addMessage(`💀 ${message.player_name} zemřel!`, 'died');
+            addMessage(`💀 ${message.player_name} zemřel!`, 'died', message.player_id === playerId ? 'own' : 'other');
             playSound('exploding_kitten');
             if (message.player_id === playerId) showExplosionEffect();
             break;
@@ -262,20 +264,20 @@ function handleMessage(message) {
             break;
 
         case 'card_drawn':
-            addMessage('Lízl jsi kartu: ' + message.card.title, 'success');
+            addMessage('Lízl jsi kartu: ' + message.card.title, 'success', 'own');
             break;
 
         case 'exploding_kitten_defused':
             if (message.player_id === playerId) {
-                addMessage('🛡️ Přežil jsi Výbušné koťátko pomocí Zneškodni!', 'defused');
+                addMessage('🛡️ Přežil jsi Výbušné koťátko pomocí Zneškodni!', 'defused', 'own');
                 playSound('defused');
             } else {
-                addMessage(`🛡️ ${message.player_name} přežil Výbušné koťátko pomocí Zneškodni!`, 'defused');
+                addMessage(`🛡️ ${message.player_name} přežil Výbušné koťátko pomocí Zneškodni!`, 'defused', 'other');
             }
             break;
 
         case 'favor_card_taken':
-            addMessage(`❌ Ztratil jsi kartu: ${message.card_title}`, 'error');
+            addMessage(`❌ Ztratil jsi kartu: ${message.card_title}`, 'error', 'own');
             break;
     }
 }
@@ -700,15 +702,20 @@ function initButtons() {
 // =========================================================================
 // Utilities
 // =========================================================================
-function addMessage(text, type = '') {
+const MAX_CHAT_MESSAGES = 4;
+
+function addMessage(text, type = '', owner = '') {
     const div = document.getElementById('game-messages');
     if (!div) return;
     const m = document.createElement('div');
-    m.className = `message ${type}`;
+    m.className = `message ${type} ${owner}`.trim();
+    m.title = text;
     const t = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
     m.innerHTML = `<span class="message-time">${t}</span><span class="message-text">${escapeHtml(text)}</span>`;
     div.firstChild ? div.insertBefore(m, div.firstChild) : div.appendChild(m);
-    div.scrollTop = 0;
+    while (div.children.length > MAX_CHAT_MESSAGES) {
+        div.removeChild(div.lastChild);
+    }
 }
 
 function playSound(soundName) {
