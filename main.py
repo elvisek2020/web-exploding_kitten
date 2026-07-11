@@ -172,13 +172,22 @@ def _remove_player_from_lobby(player_id: str, lobby: Lobby) -> None:
 # Broadcast helpers
 # ---------------------------------------------------------------------------
 async def broadcast_to_lobby(lobby: Lobby, message: dict):
+    # Neserializovatelná zpráva je chyba programu - nesmí se tiše zahodit
+    # a už vůbec ne interpretovat jako rozpad spojení všech hráčů
+    try:
+        payload = json.dumps(message)
+    except (TypeError, ValueError):
+        logger.exception("broadcast_to_lobby: message is not JSON serializable (type=%s)", message.get("type"))
+        return
+
     disconnected = []
     for p in lobby.session.players:
         ws = connected_clients.get(p.player_id)
         if ws:
             try:
-                await ws.send_json(message)
-            except Exception:
+                await ws.send_text(payload)
+            except Exception as e:
+                logger.warning("broadcast_to_lobby: send to %s failed: %s", p.name, e)
                 disconnected.append(p.player_id)
     for pid in disconnected:
         connected_clients.pop(pid, None)

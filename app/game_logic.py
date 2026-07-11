@@ -192,6 +192,17 @@ def draw_card(session: GameSession, player: Player) -> Dict[str, Any]:
 # ---------------------------------------------------------------------------
 # NOPE helpers: cancel & re-apply action effects
 # ---------------------------------------------------------------------------
+def _reorder_draw_pile(session: GameSession, order_ids: Optional[List[str]]) -> None:
+    """Seřadí dobírací balíček podle seznamu ID (uloženého při SHUFFLE).
+    Pokud se obsah balíčku mezitím změnil, pořadí se nemění."""
+    if not order_ids:
+        return
+    by_id = {c.id: c for c in session.draw_pile}
+    if set(by_id.keys()) != set(order_ids):
+        return
+    session.draw_pile = [by_id[i] for i in order_ids]
+
+
 def _cancel_action_effects(session: GameSession, action: dict) -> dict:
     """Reverse the effects of a previously applied action. Returns extra result keys."""
     result = {}
@@ -238,9 +249,7 @@ def _cancel_action_effects(session: GameSession, action: dict) -> dict:
         session.peeked_cards = []
 
     elif card_type == "SHUFFLE" and effect:
-        old_order = effect.get("old_order")
-        if old_order is not None:
-            session.draw_pile = list(old_order)
+        _reorder_draw_pile(session, effect.get("old_order_ids"))
         session.peeked_cards = []
 
     elif card_type == "REVERSE" and effect:
@@ -285,9 +294,7 @@ def _reapply_action_effects(session: GameSession, action: dict) -> dict:
         session.peeked_cards = session.draw_pile[:n].copy()
 
     elif card_type == "SHUFFLE" and effect:
-        new_order = effect.get("new_order")
-        if new_order is not None:
-            session.draw_pile = list(new_order)
+        _reorder_draw_pile(session, effect.get("new_order_ids"))
         session.peeked_cards = []
 
     elif card_type == "REVERSE" and effect:
@@ -363,14 +370,15 @@ def play_card(session: GameSession, player: Player, card_id: str,
 
     # ----- SHUFFLE -----
     elif card.type == CardType.SHUFFLE:
-        old_order = session.draw_pile.copy()
+        # Pouze ID karet (ne objekty) - result se posílá klientům jako JSON
+        old_order_ids = [c.id for c in session.draw_pile]
         random.shuffle(session.draw_pile)
         session.peeked_cards = []
         result["message"] = "Balíček byl zamíchán"
         # Uložené pořadí umožňuje NOPE zamíchání skutečně vrátit
         result["shuffle_effect"] = {
-            "old_order": old_order,
-            "new_order": session.draw_pile.copy(),
+            "old_order_ids": old_order_ids,
+            "new_order_ids": [c.id for c in session.draw_pile],
         }
 
     # ----- SEE FUTURE -----
