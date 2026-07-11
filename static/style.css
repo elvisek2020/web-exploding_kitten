@@ -704,27 +704,37 @@ header h1 {
     border-left-color: #28a745;
 }
 
+/* Vlastní tahy vs. tahy protihráčů - přebíjí barvy podle typu události výše */
+/* own = čistě soukromá zpráva (vidím jen já, např. "Lízl jsi kartu") */
+.message.own {
+    background: #dbe4ff;
+    border-left-color: #4c51bf;
+}
+
+/* other = veřejná (broadcast) zpráva o tahu protihráče */
+.message.other {
+    background: #ffe8cc;
+    border-left-color: #fd7e14;
+}
+
+/* own-public = můj tah, ale zpráva je veřejná/broadcast (vidí ji i protihráči) */
+.message.own-public {
+    background: #cdf0ea;
+    border-left-color: #0f9b8e;
+}
+
+/* defused = přežití Výbušného koťátka - vždy vlastní výrazná barva, bez ohledu na own/other */
 .message.defused {
     background: #d1ecf1;
     border-left-color: #0dcaf0;
     color: #055160;
 }
 
+/* died = smrt na Výbušné koťátko - vždy vlastní výrazná barva, bez ohledu na own/other */
 .message.died {
     background: #e7d4c0;
     border-left-color: #8b4513;
     color: #5a3a1f;
-}
-
-/* Vlastní tahy vs. tahy protihráčů - přebíjí barvy podle typu události výše */
-.message.own {
-    background: #dbe4ff;
-    border-left-color: #4c51bf;
-}
-
-.message.other {
-    background: #ffe8cc;
-    border-left-color: #fd7e14;
 }
 
 /* See Future Modal */

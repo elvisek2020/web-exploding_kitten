@@ -204,7 +204,9 @@ function handleMessage(message) {
         }
 
         case 'card_played': {
-            const cardOwner = message.player_id === playerId ? 'own' : 'other';
+            // card_played se broadcastuje všem hráčům - i moje karty vidí protihráči,
+            // proto pro moje tahy použij 'own-public' (odlišné od čistě soukromých zpráv 'own')
+            const cardOwner = message.player_id === playerId ? 'own-public' : 'other';
             addMessage(`${message.player_name} zahrál kartu ${getCardTypeName(message.card_type)}`, 'success', cardOwner);
             if (message.result?.see_future_cards && message.player_id === playerId) {
                 showSeeFutureModal(message.result.see_future_cards);
@@ -224,7 +226,8 @@ function handleMessage(message) {
         }
 
         case 'player_died':
-            addMessage(`💀 ${message.player_name} zemřel!`, 'died', message.player_id === playerId ? 'own' : 'other');
+            // Smrt na Výbušné koťátko má vždy svou původní (hnědou) barvu, bez ohledu na own/other
+            addMessage(`💀 ${message.player_name} zemřel!`, 'died');
             playSound('exploding_kitten');
             if (message.player_id === playerId) showExplosionEffect();
             break;
@@ -268,11 +271,12 @@ function handleMessage(message) {
             break;
 
         case 'exploding_kitten_defused':
+            // Přežití je vždy výrazná (vlastní) barva, bez ohledu na to, kdo přežil
             if (message.player_id === playerId) {
-                addMessage('🛡️ Přežil jsi Výbušné koťátko pomocí Zneškodni!', 'defused', 'own');
+                addMessage('🛡️ Přežil jsi Výbušné koťátko pomocí Zneškodni!', 'defused');
                 playSound('defused');
             } else {
-                addMessage(`🛡️ ${message.player_name} přežil Výbušné koťátko pomocí Zneškodni!`, 'defused', 'other');
+                addMessage(`🛡️ ${message.player_name} přežil Výbušné koťátko pomocí Zneškodni!`, 'defused');
             }
             break;
 
