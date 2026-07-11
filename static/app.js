@@ -60,16 +60,9 @@ window.addEventListener('load', () => {
                 window.pendingJoinPassword = pwdInput.value.trim();
             }
 
-            if (ws && ws.readyState === WebSocket.OPEN && !token) {
-                const msg = { type: 'join', name };
-                if (window.pendingJoinPassword) msg.password = window.pendingJoinPassword;
-                ws.send(JSON.stringify(msg));
-                delete window.pendingJoinName;
-                delete window.pendingJoinPassword;
-                return;
-            }
-
-            if (!token && ws) {
+            // Uživatel se chce přihlásit znovu – zahodit starou session (např. po restartu serveru)
+            clearSession();
+            if (ws) {
                 ws.onclose = null;
                 ws.close();
                 ws = null;
@@ -177,11 +170,9 @@ function handleMessage(message) {
 
         case 'error':
             showError(message.message || 'Nastala chyba');
-            if (!playerId && token && (message.message || '').includes('token')) {
-                sessionStorage.removeItem('token');
-                sessionStorage.removeItem('player_id');
-                token = null;
-                playerId = null;
+            if (token && isTokenError(message.message)) {
+                clearSession();
+                if (ws) ws.onclose = null;
                 showScreen('login-screen');
             }
             break;
@@ -248,12 +239,7 @@ function handleMessage(message) {
             break;
 
         case 'leave_ok':
-            sessionStorage.removeItem('token');
-            sessionStorage.removeItem('player_id');
-            playerId = null;
-            token = null;
-            currentLobbyId = null;
-            currentLobbyName = null;
+            clearSession();
             if (ws) { ws.onclose = null; ws.close(); ws = null; }
             showScreen('login-screen');
             break;
@@ -301,6 +287,22 @@ function showScreen(screenId) {
     document.querySelectorAll('.screen').forEach(s => s.classList.add('hidden'));
     const el = document.getElementById(screenId);
     if (el) el.classList.remove('hidden');
+}
+
+function clearSession() {
+    sessionStorage.removeItem('token');
+    sessionStorage.removeItem('player_id');
+    sessionStorage.removeItem('is_super_power');
+    token = null;
+    playerId = null;
+    currentLobbyId = null;
+    currentLobbyName = null;
+    currentGameState = null;
+}
+
+function isTokenError(message) {
+    const m = (message || '').toLowerCase();
+    return m.includes('token') || m.includes('neplatný') || m.includes('vypršel');
 }
 
 function showError(message) {
@@ -667,10 +669,7 @@ function initButtons() {
         if (ws?.readyState === WebSocket.OPEN) {
             ws.send(JSON.stringify({ type: 'logout' }));
         } else {
-            sessionStorage.removeItem('token');
-            sessionStorage.removeItem('player_id');
-            playerId = null;
-            token = null;
+            clearSession();
             showScreen('login-screen');
         }
     });
