@@ -922,7 +922,7 @@ header h1 {
 }
 
 .confirm-content {
-    width: 420px;
+    width: 460px;
     max-width: calc(100vw - 32px);
     box-sizing: border-box;
 }
@@ -930,6 +930,8 @@ header h1 {
 .confirm-message {
     margin-bottom: 20px;
     line-height: 1.5;
+    /* \n ve zprávě = nový řádek */
+    white-space: pre-line;
 }
 
 .modal-actions {

@@ -968,7 +968,7 @@ function initButtons() {
         if (me?.alive) {
             const ok = await showConfirm({
                 title: 'Opustit hru',
-                message: 'Opravdu chceš opustit rozehranou hru? Vypadneš z ní a zpátky se už nevrátíš.',
+                message: 'Opravdu chceš opustit rozehranou hru?\nVypadneš z ní a zpátky se už nevrátíš.',
                 okText: 'Opustit hru',
                 danger: true,
             });
