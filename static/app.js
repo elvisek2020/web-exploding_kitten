@@ -747,11 +747,14 @@ function updateGame(state) {
 
     const deckSizeDiv = document.getElementById('deck-size');
     if (deckSizeDiv && state.draw_pile_size !== undefined) {
-        deckSizeDiv.textContent = `${state.draw_pile_size} karet`;
+        const n = state.draw_pile_size;
+        deckSizeDiv.innerHTML = `<span class="deck-count">${n}</span><span class="deck-label">${formatCards(n)}</span>`;
     }
 
     const direction = document.getElementById('direction-indicator');
-    if (direction) direction.textContent = `Směr: ${state.reverse_direction ? '⬅️ Dozadu' : '➡️ Dopředu'}`;
+    if (direction) {
+        direction.innerHTML = `<span class="direction-label">Směr</span><span class="direction-value">${state.reverse_direction ? '⬅️ Dozadu' : '➡️ Dopředu'}</span>`;
+    }
 
     updatePlayers(state.players, state.current_player_id, state.pending_turns || {});
 
@@ -759,6 +762,12 @@ function updateGame(state) {
         if (!me.hand) me.hand = [];
         updateMyHand(me.hand, state.current_player_id === playerId, state.can_nope || false);
     }
+}
+
+function formatCards(n) {
+    if (n === 1) return 'karta';
+    if (n >= 2 && n <= 4) return 'karty';
+    return 'karet';
 }
 
 function formatTurns(n) {
