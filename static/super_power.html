@@ -23,7 +23,6 @@
                 <input type="text" id="player-name" placeholder="Zadej své jméno" maxlength="20">
                 <input type="password" id="player-password" placeholder="Zadej heslo" maxlength="50">
                 <button id="join-btn" class="btn-primary">Přihlásit</button>
-                <div id="login-error" class="error-message"></div>
                 <div style="text-align: center; margin-top: 15px; font-size: 0.9em;">
                     <a href="/" style="color: #667eea; text-decoration: none; opacity: 0.7;">&larr; Normální přihlášení</a>
                 </div>
@@ -36,7 +35,7 @@
                 <h2>Herní místnosti (Admin)</h2>
                 <div id="lobbies-list" class="lobbies-list"></div>
                 <div class="create-lobby-form">
-                    <input type="text" id="new-lobby-name" placeholder="Název nové místnosti" maxlength="30">
+                    <input type="text" id="new-lobby-name" placeholder="Název nové místnosti" maxlength="22">
                     <button id="create-lobby-btn" class="btn-primary">Vytvořit místnost</button>
                 </div>
                 <button id="logout-btn" class="btn-secondary">Odhlásit se</button>
@@ -61,6 +60,8 @@
                     <div class="box deck-info-box">
                         <h3>Balíček</h3>
                         <div id="deck-size" class="deck-size">-</div>
+                        <div id="direction-indicator" class="direction-indicator"></div>
+                        <button id="leave-game-btn" class="btn-link hidden">🚪 Opustit hru</button>
                     </div>
                     <div id="players-container" class="players-container"></div>
                     <div class="box messages-box">
@@ -93,7 +94,7 @@
     </div>
 
     <!-- See Future Modal -->
-    <div id="see-future-modal" class="modal">
+    <div id="see-future-modal" class="modal" aria-label="Pohledni do budoucnosti">
         <div class="modal-content">
             <h3>Pohledni do budoucnosti - Top 3 karty</h3>
             <div id="modal-cards" class="modal-cards"></div>
@@ -102,7 +103,7 @@
     </div>
 
     <!-- Favor Target Selection Modal -->
-    <div id="favor-modal" class="modal">
+    <div id="favor-modal" class="modal" aria-label="Tohle si vezmu">
         <div class="modal-content">
             <h3>Vyber cílového hráče pro Tohle si vezmu</h3>
             <div id="favor-players-list" class="favor-players-list"></div>
@@ -111,7 +112,7 @@
     </div>
 
     <!-- View Deck Modal -->
-    <div id="view-deck-modal" class="modal">
+    <div id="view-deck-modal" class="modal" aria-label="Dobírací balíček">
         <div class="modal-content">
             <h3>Dobírací balíček - všechny karty</h3>
             <div id="deck-cards" class="modal-cards"></div>
@@ -119,60 +120,79 @@
         </div>
     </div>
 
+    <!-- Confirm Modal (náhrada nativního confirm) -->
+    <div id="confirm-modal" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+        <div class="modal-content confirm-content">
+            <h3 id="confirm-title">Potvrzení</h3>
+            <p id="confirm-message" class="confirm-message"></p>
+            <div class="modal-actions">
+                <button id="confirm-cancel-btn" class="btn-secondary">Zrušit</button>
+                <button id="confirm-ok-btn" class="btn-primary">Ano</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hlášky (chyby, stav připojení) - viditelné na všech obrazovkách -->
+    <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
+
     <!-- Explosion Effect Overlay -->
     <div id="explosion-overlay" class="explosion-overlay"></div>
 
     <script src="/static/app.js"></script>
     <script>
-        let isSuperPower = false;
+        // Admin příznak ukládá app.js při join_ok / reconnect_ok (i po obnovení
+        // spojení přímo do hry, kdy se lobby vůbec nezobrazí)
+        function isAdmin() {
+            return sessionStorage.getItem('is_super_power') === 'true';
+        }
 
-        // Override lobby update to show remove buttons for admin
+        function createRemoveButton(p, confirmMessage) {
+            const btn = document.createElement('button');
+            btn.className = 'remove-player-btn btn-secondary';
+            btn.textContent = '✕';
+            btn.title = `Odebrat hráče ${p.name}`;
+            btn.addEventListener('click', async (e) => {
+                e.stopPropagation();
+                const ok = await showConfirm({
+                    title: 'Odebrat hráče',
+                    message: confirmMessage,
+                    okText: 'Odebrat',
+                    danger: true,
+                });
+                if (ok) wsSend({ type: 'remove_player', target_player_id: p.player_id });
+            });
+            return btn;
+        }
+
+        // Tlačítka pro odebrání hráčů v místnosti
         const _origUpdateLobby = window.updateLobby;
         window.updateLobby = function(state) {
             _origUpdateLobby.call(this, state);
-
-            const myPlayer = state.players.find(p => p.player_id === playerId);
-            if (myPlayer && myPlayer.is_super_power) {
-                isSuperPower = true;
-                const list = document.getElementById('players-list');
-                if (!list) return;
-                const items = list.querySelectorAll('.player-item');
-                items.forEach(item => {
-                    const nameSpan = item.querySelector('.player-name');
-                    if (!nameSpan) return;
-                    const pName = nameSpan.textContent.trim();
-                    const p = state.players.find(x => x.name === pName && x.player_id !== playerId);
-                    if (p && !p.is_super_power && !item.querySelector('.remove-player-btn')) {
-                        const btn = document.createElement('button');
-                        btn.className = 'remove-player-btn btn-secondary';
-                        btn.textContent = '✕';
-                        btn.addEventListener('click', (e) => {
-                            e.stopPropagation();
-                            if (ws?.readyState === WebSocket.OPEN) {
-                                ws.send(JSON.stringify({ type: 'remove_player', target_player_id: p.player_id }));
-                            }
-                        });
-                        const left = item.querySelector('.player-item-left');
-                        if (left) left.insertBefore(btn, left.firstChild);
-                        else item.insertBefore(btn, item.firstChild);
-                    }
-                });
-            }
+            if (!isAdmin()) return;
+            document.querySelectorAll('#players-list .player-item[data-player-id]').forEach(item => {
+                const p = state.players.find(x => x.player_id === item.dataset.playerId);
+                if (!p || p.player_id === playerId || p.is_super_power) return;
+                const left = item.querySelector('.player-item-left') || item;
+                left.insertBefore(
+                    createRemoveButton(p, `Opravdu odebrat hráče „${p.name}“ z místnosti?`),
+                    left.firstChild,
+                );
+            });
         };
 
-        // Override game update to show admin panel
+        // Admin panel a odebírání hráčů během hry
         const _origUpdateGame = window.updateGame;
         window.updateGame = function(state) {
             _origUpdateGame.call(this, state);
+            const playing = state.status === 'playing';
             const box = document.querySelector('.super-power-box');
-            if (box) {
-                const mp = state.players.find(p => p.player_id === playerId);
-                if (mp && mp.is_super_power && state.status === 'playing') {
-                    box.classList.remove('hidden');
-                } else {
-                    box.classList.add('hidden');
-                }
-            }
+            if (box) box.classList.toggle('hidden', !(isAdmin() && playing));
+            if (!isAdmin() || !playing) return;
+            document.querySelectorAll('#players-container .player-card[data-player-id]').forEach(card => {
+                const p = state.players.find(x => x.player_id === card.dataset.playerId);
+                if (!p || p.player_id === playerId || p.is_super_power) return;
+                card.appendChild(createRemoveButton(p, `Opravdu odebrat hráče „${p.name}“ z rozehrané hry? Vypadne z ní.`));
+            });
         };
 
         // Deck modal for admin
@@ -181,7 +201,7 @@
             const div = document.getElementById('deck-cards');
             if (!modal || !div) return;
             div.innerHTML = '';
-            if (cards.length === 0) { div.innerHTML = '<p>Balíček je prázdný</p>'; modal.classList.add('show'); return; }
+            if (cards.length === 0) div.innerHTML = '<p>Balíček je prázdný</p>';
             cards.forEach(c => {
                 const cd = document.createElement('div');
                 cd.className = `card card-type-${c.type.toLowerCase()}`;
@@ -194,26 +214,28 @@
                 cd.innerHTML = `<div class="card-title">${escapeHtml(c.title)}</div>`;
                 div.appendChild(cd);
             });
-            modal.classList.add('show');
+            openModal(modal);
         }
 
         // Admin button handlers
         document.addEventListener('DOMContentLoaded', () => {
-            document.getElementById('end-game-btn')?.addEventListener('click', () => {
-                if (!ws || ws.readyState !== WebSocket.OPEN || !isSuperPower) return;
-                if (confirm('Opravdu chcete ukončit hru předčasně?')) {
-                    ws.send(JSON.stringify({ type: 'end_game' }));
-                }
+            document.getElementById('end-game-btn')?.addEventListener('click', async () => {
+                if (!isAdmin()) return;
+                const ok = await showConfirm({
+                    title: 'Ukončit hru',
+                    message: 'Opravdu chceš hru předčasně ukončit? Pokud ve hře zbývá víc živých hráčů, skončí bez vítěze.',
+                    okText: 'Ukončit hru',
+                    danger: true,
+                });
+                if (ok) wsSend({ type: 'end_game' });
             });
 
             document.getElementById('view-deck-btn')?.addEventListener('click', () => {
-                if (!ws || ws.readyState !== WebSocket.OPEN || !isSuperPower) return;
-                ws.send(JSON.stringify({ type: 'view_deck' }));
+                if (isAdmin()) wsSend({ type: 'view_deck' });
             });
 
             document.getElementById('close-deck-modal-btn')?.addEventListener('click', () => {
-                const m = document.getElementById('view-deck-modal');
-                if (m) m.classList.remove('show');
+                closeModal(document.getElementById('view-deck-modal'));
             });
         });
 

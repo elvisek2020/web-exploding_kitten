@@ -4,13 +4,37 @@ on:
   push:
     branches:
       - main
+  pull_request:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_NAME: elvisek2020/web-exploding_kitten
 
 jobs:
+  test:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.11"
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest
+
   build-and-push:
+    # Image se sestaví a publikuje jen z main a jen když projdou testy
+    needs: test
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     permissions:
       contents: read

@@ -1,0 +1,13 @@
+# Nic z toho aplikace za běhu nepotřebuje; .env nesmí skončit v image
+.git
+.github
+.env
+.env.*
+**/__pycache__
+*.py[cod]
+.pytest_cache
+tests
+requirements-dev.txt
+pytest.ini
+_docs
+_backup

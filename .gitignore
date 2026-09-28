@@ -37,8 +37,6 @@ htmlcov/
 .tox/
 .hypothesis/
 
-# Docker
-.dockerignore
 
 # macOS
 .DS_Store

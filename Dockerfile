@@ -14,5 +14,7 @@ EXPOSE 8000
 # --proxy-headers: respektuje X-Forwarded-For za reverse proxy.
 # Kterym proxy verit ridi env promenna FORWARDED_ALLOW_IPS (cte ji uvicorn),
 # default "127.0.0.1" - bez nastaveni se forwarded hlavickam neveri.
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers"]
+# --ws-max-size: vetsi WebSocket zpravy uvicorn odmitne uz pri prijmu
+# (aplikace sama pripousti max. MAX_WS_MESSAGE_SIZE znaku, default 4096).
+CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--proxy-headers", "--ws-max-size", "65536"]
 

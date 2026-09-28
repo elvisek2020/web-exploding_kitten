@@ -54,14 +54,15 @@ class Player:
     connected: bool = True
     token_created_at: float = field(default_factory=time.time)
 
-    def to_dict(self, hide_hand: bool = False) -> Dict[str, Any]:
+    def to_dict(self, hide_hand: bool = False, reveal_admin: bool = False) -> Dict[str, Any]:
         result = {
             "player_id": self.player_id,
             "name": self.name,
             "alive": self.alive,
             "ready": self.ready,
             "hand_size": len(self.hand),
-            "is_super_power": self.is_super_power,
+            # Kdo je admin, vidí jen on sám (a jiní admini) - ostatním se neprozrazuje
+            "is_super_power": self.is_super_power if reveal_admin else False,
             "connected": self.connected
         }
         if not hide_hand:
@@ -99,18 +100,21 @@ class GameSession:
         return [p for p in self.players if p.alive]
 
     def get_next_player(self, current_id: str) -> Optional[Player]:
+        """Další živý hráč ve směru hry. Pozice se počítá v seznamu všech hráčů,
+        takže funguje i pro hráče, který právě zemřel (není mezi živými)."""
         alive = self.get_alive_players()
         if not alive:
             return None
-        try:
-            current_idx = next(i for i, p in enumerate(alive) if p.player_id == current_id)
-            if self.reverse_direction:
-                next_idx = (current_idx - 1) % len(alive)
-            else:
-                next_idx = (current_idx + 1) % len(alive)
-            return alive[next_idx]
-        except StopIteration:
-            return alive[0] if alive else None
+        current_idx = next((i for i, p in enumerate(self.players) if p.player_id == current_id), None)
+        if current_idx is None:
+            return alive[0]
+        step = -1 if self.reverse_direction else 1
+        n = len(self.players)
+        for offset in range(1, n + 1):
+            candidate = self.players[(current_idx + step * offset) % n]
+            if candidate.alive:
+                return candidate
+        return None
 
 
 @dataclass

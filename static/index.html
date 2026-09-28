@@ -22,7 +22,6 @@
                 <h2>Přihlášení</h2>
                 <input type="text" id="player-name" placeholder="Zadej své jméno" maxlength="20">
                 <button id="join-btn" class="btn-primary">Přihlásit</button>
-                <div id="login-error" class="error-message"></div>
                 <div style="text-align: center; margin-top: 15px; font-size: 0.9em;">
                     <a href="/super_power" style="color: #667eea; text-decoration: none; opacity: 0.7;">🔐 Super Power</a>
                 </div>
@@ -36,7 +35,7 @@
                 <h2>Herní místnosti</h2>
                 <div id="lobbies-list" class="lobbies-list"></div>
                 <div class="create-lobby-form">
-                    <input type="text" id="new-lobby-name" placeholder="Název nové místnosti" maxlength="30">
+                    <input type="text" id="new-lobby-name" placeholder="Název nové místnosti" maxlength="22">
                     <button id="create-lobby-btn" class="btn-primary">Vytvořit místnost</button>
                 </div>
                 <button id="logout-btn" class="btn-secondary">Odhlásit se</button>
@@ -61,6 +60,8 @@
                     <div class="box deck-info-box">
                         <h3>Balíček</h3>
                         <div id="deck-size" class="deck-size">-</div>
+                        <div id="direction-indicator" class="direction-indicator"></div>
+                        <button id="leave-game-btn" class="btn-link hidden">🚪 Opustit hru</button>
                     </div>
                     <div id="players-container" class="players-container"></div>
                     <div class="box messages-box">
@@ -84,7 +85,7 @@
     </div>
 
     <!-- See Future Modal -->
-    <div id="see-future-modal" class="modal">
+    <div id="see-future-modal" class="modal" aria-label="Pohledni do budoucnosti">
         <div class="modal-content">
             <h3>Pohledni do budoucnosti - Top 3 karty</h3>
             <div id="modal-cards" class="modal-cards"></div>
@@ -93,13 +94,28 @@
     </div>
 
     <!-- Favor Target Selection Modal -->
-    <div id="favor-modal" class="modal">
+    <div id="favor-modal" class="modal" aria-label="Tohle si vezmu">
         <div class="modal-content">
             <h3>Vyber cílového hráče pro Tohle si vezmu</h3>
             <div id="favor-players-list" class="favor-players-list"></div>
             <button id="cancel-favor-btn" class="btn-secondary">Zrušit</button>
         </div>
     </div>
+
+    <!-- Confirm Modal (náhrada nativního confirm) -->
+    <div id="confirm-modal" class="modal" aria-labelledby="confirm-title" aria-describedby="confirm-message">
+        <div class="modal-content confirm-content">
+            <h3 id="confirm-title">Potvrzení</h3>
+            <p id="confirm-message" class="confirm-message"></p>
+            <div class="modal-actions">
+                <button id="confirm-cancel-btn" class="btn-secondary">Zrušit</button>
+                <button id="confirm-ok-btn" class="btn-primary">Ano</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Hlášky (chyby, stav připojení) - viditelné na všech obrazovkách -->
+    <div id="toast" class="toast" role="alert" aria-live="assertive"></div>
 
     <!-- Explosion Effect Overlay -->
     <div id="explosion-overlay" class="explosion-overlay"></div>

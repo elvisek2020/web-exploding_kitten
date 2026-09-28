@@ -184,6 +184,7 @@ header h1 {
 
 .create-lobby-form {
     display: flex;
+    align-items: stretch;
     gap: 10px;
     margin-bottom: 10px;
 }
@@ -200,6 +201,12 @@ header h1 {
 
 .create-lobby-form input:focus {
     border-color: #667eea;
+}
+
+.create-lobby-form input,
+.create-lobby-form button {
+    box-sizing: border-box;
+    margin: 0;
 }
 
 .create-lobby-form button {
@@ -309,17 +316,67 @@ header h1 {
     transform: translateY(-2px);
 }
 
-.error-message {
-    color: #dc3545;
-    margin-top: 10px;
-    padding: 10px;
-    background: #f8d7da;
-    border-radius: 6px;
-    display: none;
+.hidden {
+    display: none !important;
 }
 
-.error-message.show {
+/* Hlášky nahoře uprostřed - viditelné na všech obrazovkách i nad modály */
+.toast {
+    display: none;
+    position: fixed;
+    top: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: max-content;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+    padding: 12px 18px;
+    color: #721c24;
+    background: #f8d7da;
+    border: 2px solid #dc3545;
+    border-radius: 8px;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+    font-weight: bold;
+    text-align: center;
+    z-index: 2000;
+}
+
+.toast.show {
     display: block;
+}
+
+.btn-danger {
+    padding: 12px 24px;
+    font-size: 16px;
+    border: none;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s;
+    font-weight: bold;
+    width: 100%;
+    margin-top: 10px;
+    background: #dc3545;
+    color: white;
+}
+
+.btn-danger:hover {
+    background: #c82333;
+    transform: translateY(-2px);
+}
+
+.btn-link {
+    background: none;
+    border: none;
+    color: #6c757d;
+    cursor: pointer;
+    font-size: 0.85em;
+    margin-top: 8px;
+    padding: 4px;
+    text-decoration: underline;
+}
+
+.btn-link:hover {
+    color: #dc3545;
 }
 
 .status-message {
@@ -426,6 +483,53 @@ header h1 {
     font-weight: bold;
     font-size: 1.1em;
     margin-bottom: 10px;
+}
+
+.player-card {
+    position: relative;
+}
+
+.player-card .remove-player-btn {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    margin: 0 !important;
+}
+
+.player-card .player-turns {
+    font-size: 0.85em;
+    color: #667eea;
+    margin-top: 4px;
+}
+
+.player-card .player-dead {
+    color: red;
+    margin-top: 5px;
+}
+
+.player-card .player-disconnected {
+    color: #ff9800;
+    margin-top: 5px;
+    font-size: 0.9em;
+}
+
+.reconnect-countdown {
+    font-variant-numeric: tabular-nums;
+}
+
+.direction-indicator {
+    margin-top: 8px;
+    padding: 6px;
+    background: rgba(102, 126, 234, 0.1);
+    border-radius: 6px;
+    text-align: center;
+    font-weight: bold;
+    color: #667eea;
+    font-size: 14px;
+}
+
+.direction-indicator:empty {
+    display: none;
 }
 
 .player-card .hand-size {
@@ -768,6 +872,27 @@ header h1 {
     color: #667eea;
 }
 
+.confirm-content {
+    width: 420px;
+    max-width: calc(100vw - 32px);
+    box-sizing: border-box;
+}
+
+.confirm-message {
+    margin-bottom: 20px;
+    line-height: 1.5;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 10px;
+}
+
+.modal-actions button {
+    flex: 1;
+    margin-top: 0;
+}
+
 .modal-cards {
     display: flex;
     gap: 15px;
@@ -821,16 +946,25 @@ header h1 {
     display: flex;
     justify-content: space-between;
     align-items: center;
+    width: 100%;
+    font: inherit;
+    color: inherit;
+    text-align: left;
 }
 
-.favor-player-item:hover {
+.favor-player-item:hover:not(:disabled) {
     background: #e9ecef;
     border-color: #667eea;
     transform: translateX(5px);
 }
 
-.favor-player-item:active {
+.favor-player-item:active:not(:disabled) {
     transform: scale(0.98);
+}
+
+.favor-player-item:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .favor-player-name {
@@ -1207,11 +1341,12 @@ header h1 {
     opacity: 0;
     pointer-events: none;
     transition: opacity 0.1s ease-in;
-    animation: explosionFlash 1.5s ease-out;
 }
 
+/* Animace jen při skutečném výbuchu - na základní třídě blikala při každém načtení stránky */
 .explosion-overlay.active {
     opacity: 1;
+    animation: explosionFlash 1.5s ease-out;
 }
 
 @keyframes explosionFlash {

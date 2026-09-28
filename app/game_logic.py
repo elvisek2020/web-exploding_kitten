@@ -203,34 +203,24 @@ def _reorder_draw_pile(session: GameSession, order_ids: Optional[List[str]]) -> 
     session.draw_pile = [by_id[i] for i in order_ids]
 
 
+def _restore_pending_turns(session: GameSession, effect: dict) -> None:
+    """Vrátí počty tahů do stavu před zahráním karty (snapshot z play_card).
+    Hráči, kteří mezitím vypadli nebo odešli, se vynechají."""
+    before = effect.get("pending_before")
+    if before is None:
+        return
+    alive_ids = {p.player_id for p in session.get_alive_players()}
+    session.pending_turns = {pid: n for pid, n in before.items() if pid in alive_ids}
+
+
 def _cancel_action_effects(session: GameSession, action: dict) -> dict:
     """Reverse the effects of a previously applied action. Returns extra result keys."""
     result = {}
     card_type = action.get("card_type")
     effect = action.get("effect")
 
-    if card_type == "ATTACK" and effect:
-        nxt_id = effect.get("next_player_id")
-        old_p = effect.get("old_pending", 0)
-        old_pc = effect.get("old_pending_current", 0)
-        if nxt_id:
-            nxt = session.get_player(nxt_id)
-            if nxt:
-                if old_p == 0:
-                    if session.current_player_id == nxt_id:
-                        session.pending_turns[nxt_id] = 1
-                    elif nxt_id in session.pending_turns:
-                        del session.pending_turns[nxt_id]
-                else:
-                    session.pending_turns[nxt_id] = old_p
-                if old_pc > 0:
-                    session.pending_turns[action["player_id"]] = old_pc
-
-    elif card_type == "SKIP" and effect:
-        pid = effect.get("player_id")
-        old_p = effect.get("old_pending", 0)
-        if pid and old_p > 0:
-            session.pending_turns[pid] = old_p
+    if card_type in ("ATTACK", "SKIP") and effect:
+        _restore_pending_turns(session, effect)
 
     elif card_type == "FAVOR" and effect:
         from_id = effect.get("from_player_id")
@@ -254,6 +244,7 @@ def _cancel_action_effects(session: GameSession, action: dict) -> dict:
 
     elif card_type == "REVERSE" and effect:
         session.reverse_direction = effect.get("old_direction", False)
+        _restore_pending_turns(session, effect)
 
     return result
 
@@ -321,8 +312,10 @@ def play_card(session: GameSession, player: Player, card_id: str,
     # Validace specifické pro typ karty PŘED odebráním z ruky,
     # aby se karta při chybě "nespálila".
     if card.type == CardType.FAVOR:
-        if not target_player_id:
+        if not target_player_id or not isinstance(target_player_id, str):
             return {"error": "FAVOR vyžaduje cílového hráče"}
+        if target_player_id == player.player_id:
+            return {"error": "Nemůžeš si vzít kartu sám od sebe"}
         favor_target = session.get_player(target_player_id)
         if not favor_target or not favor_target.alive or len(favor_target.hand) == 0:
             return {"error": "Neplatný cíl pro FAVOR"}
@@ -339,6 +332,10 @@ def play_card(session: GameSession, player: Player, card_id: str,
     session.discard_pile.append(card)
     logger.debug("Player %s played %s", player.name, card.type.value)
 
+    # Stav tahů před akcí - NOPE na tahovou kartu (Přeskoč/Zaútoč/Změna směru)
+    # ho vrátí přesně, včetně tahů, které karta spotřebovala
+    pending_before = dict(session.pending_turns)
+
     result: Dict[str, Any] = {"success": True, "card_type": card.type.value}
 
     # ----- SKIP -----
@@ -346,26 +343,23 @@ def play_card(session: GameSession, player: Player, card_id: str,
         result["end_turn"] = True
         result["skip_effect"] = {
             "player_id": player.player_id,
-            "old_pending": session.pending_turns.get(player.player_id, 0),
+            "pending_before": pending_before,
         }
 
     # ----- ATTACK -----
     elif card.type == CardType.ATTACK:
         result["end_turn"] = True
         result["force_end_turn"] = True
-        cur_turns = session.pending_turns.get(player.player_id, 1)
-        old_pc = session.pending_turns.get(player.player_id, 0)
+        cur_turns = max(1, session.pending_turns.get(player.player_id, 1))
         session.pending_turns[player.player_id] = 0
         nxt = session.get_next_player(player.player_id)
         if nxt:
-            old_pn = session.pending_turns.get(nxt.player_id, 0)
             new_turns = cur_turns + 1
             session.pending_turns[nxt.player_id] = new_turns
             result["attack_effect"] = {
                 "next_player_id": nxt.player_id,
-                "old_pending": old_pn,
                 "new_pending": new_turns,
-                "old_pending_current": old_pc,
+                "pending_before": pending_before,
             }
 
     # ----- SHUFFLE -----
@@ -421,6 +415,7 @@ def play_card(session: GameSession, player: Player, card_id: str,
         result["reverse_effect"] = {
             "new_direction": session.reverse_direction,
             "old_direction": old_dir,
+            "pending_before": pending_before,
         }
         result["message"] = f"Směr tahu změněn na {'dozadu' if session.reverse_direction else 'dopředu'}"
 
@@ -457,9 +452,9 @@ def play_card(session: GameSession, player: Player, card_id: str,
         else:
             # First NOPE on a non-NOPE action
             _cancel_action_effects(session, last)
-            result["nope_action"] = last
             result["action_cancelled"] = True
             result["return_turn_to"] = last.get("player_id")
+            result["original_card_type"] = last.get("card_type")
 
             session.last_action_for_nope = {
                 "player_id": player.player_id,
@@ -485,34 +480,32 @@ def play_card(session: GameSession, player: Player, card_id: str,
 
 
 def end_turn(session: GameSession, force: bool = False) -> None:
-    current = session.get_player(session.current_player_id)
+    """Ukončí tah aktuálního hráče.
+
+    Bez force se spotřebuje jeden tah; pokud hráči zbývají další (po Zaútoč),
+    zůstává na tahu. S force (Zaútoč, odchod hráče) se tah předá vždy.
+    Konec hry tady záměrně neřešíme - vyhodnocuje ho volající přes
+    check_game_end, aby se vítězi vždy poslalo oznámení.
+    """
+    current_id = session.current_player_id
+    current = session.get_player(current_id)
     if not current:
         return
 
-    if not force:
-        if session.current_player_id in session.pending_turns:
-            session.pending_turns[session.current_player_id] -= 1
-            if session.pending_turns[session.current_player_id] <= 0:
-                session.pending_turns[session.current_player_id] = 0
+    if not current.alive:
+        session.pending_turns.pop(current_id, None)
+    elif not force and current_id in session.pending_turns:
+        session.pending_turns[current_id] = max(0, session.pending_turns[current_id] - 1)
+        if session.pending_turns[current_id] > 0:
+            return
 
-    if (not force and current and current.alive
-            and session.current_player_id in session.pending_turns
-            and session.pending_turns[session.current_player_id] > 0):
-        return
-
-    if current and not current.alive:
-        session.pending_turns.pop(session.current_player_id, None)
-
-    nxt = session.get_next_player(session.current_player_id)
+    nxt = session.get_next_player(current_id)
     if nxt:
-        if current and not current.alive:
-            session.pending_turns.pop(session.current_player_id, None)
+        if session.pending_turns.get(current_id, 0) <= 0:
+            session.pending_turns.pop(current_id, None)
         session.current_player_id = nxt.player_id
-        if session.pending_turns.get(session.current_player_id, 0) == 0:
-            session.pending_turns[session.current_player_id] = 1
-
-    if len(session.get_alive_players()) <= 1:
-        session.status = GameStatus.FINISHED
+        if session.pending_turns.get(nxt.player_id, 0) <= 0:
+            session.pending_turns[nxt.player_id] = 1
 
 
 def check_game_end(session: GameSession) -> Optional[Player]:

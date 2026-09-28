@@ -8,10 +8,18 @@ services:
     ports:
       - "8080:8000"
     environment:
-      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-TvojeSilneHeslo123}
+      # Heslo pro admin rezim Super Power. Nastav ho v souboru .env vedle
+      # tohoto souboru (viz .env.example), nebo ho sem napis primo misto
+      # ${ADMIN_PASSWORD:-}. Bez hesla je admin rezim vypnuty.
+      - ADMIN_PASSWORD=${ADMIN_PASSWORD:-}
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
       - TOKEN_EXPIRY_SECONDS=${TOKEN_EXPIRY_SECONDS:-3600}
-      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-*}
+      # Prazdne = WebSocket jen ze stejne domeny, na ktere hra bezi.
+      # Za reverse proxy, ktera prepisuje hlavicku Host, nastav konkretni
+      # origin (napr. "https://kotatka.example.com"); "*" = libovolny web.
+      - ALLOWED_ORIGINS=${ALLOWED_ORIGINS:-}
+      # Kolik sekund se ceka na navrat odpojeneho hrace, nez vypadne ze hry
+      - DISCONNECT_GRACE_SECONDS=${DISCONNECT_GRACE_SECONDS:-15}
       # IP reverse proxy, jejimz X-Forwarded-For hlavickam se ma verit
       # (napr. "172.20.0.1"); "*" = verit vsem (jen pokud je port nepristupny primo)
       - FORWARDED_ALLOW_IPS=${FORWARDED_ALLOW_IPS:-127.0.0.1}
