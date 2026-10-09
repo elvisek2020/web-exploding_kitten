@@ -813,81 +813,112 @@ header h1 {
 }
 
 .messages {
-    /* Natvrdo posledních 4 tahy, bez rolování - JS udržuje max. 4 zprávy v DOM */
-    height: 148px;
+    /* Natvrdo poslední 4 události, bez rolování - JS udržuje max. 4 zprávy v DOM */
+    height: 168px;
     overflow: hidden;
     display: flex;
-    flex-direction: column; /* Normální směr - nejnovější zprávy budou na začátku */
-    align-items: stretch;
+    flex-direction: column; /* nejnovější nahoře */
+    gap: 4px;
     font-size: 0.85em;
 }
 
 .message {
-    padding: 6px 8px;
-    margin: 2px 0;
-    background: #f5f5f5;
-    border-radius: 6px;
-    border-left: 4px solid #667eea;
     display: flex;
-    flex-direction: row;
-    align-items: center;
+    align-items: flex-start;
     gap: 8px;
+    padding: 5px 8px;
+    background: #fff;
+    border: 1px solid #e6e8f0;
+    border-left: 4px solid #c3c8d6;
+    border-radius: 6px;
+    line-height: 1.35;
+    animation: logIn 0.25s ease-out;
 }
 
-.message-time {
-    font-size: 0.75em;
-    color: #999;
-    white-space: nowrap;
+/* Starší zprávy postupně blednou, nejnovější je výrazná */
+.message:nth-child(2) { opacity: 0.85; }
+.message:nth-child(3) { opacity: 0.7; }
+.message:nth-child(4) { opacity: 0.55; }
+
+.message:first-child {
+    box-shadow: 0 2px 6px rgba(102, 126, 234, 0.18);
+}
+
+@keyframes logIn {
+    from { opacity: 0; transform: translateY(-4px); }
+    to { opacity: 1; transform: none; }
+}
+
+.message-icon {
+    flex-shrink: 0;
+    width: 1.3em;
+    text-align: center;
 }
 
 .message-text {
     flex: 1;
-    white-space: nowrap;
+    min-width: 0;
+    color: #333;
+    /* dlouhá zpráva se zalomí, nejvýš na dva řádky */
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
     overflow: hidden;
-    text-overflow: ellipsis;
 }
 
-.message.error {
-    background: #f8d7da;
-    border-left-color: #dc3545;
+.message-time {
+    flex-shrink: 0;
+    font-size: 0.75em;
+    color: #9aa0b4;
+    padding-top: 2px;
+    font-variant-numeric: tabular-nums;
 }
 
-.message.success {
-    background: #d4edda;
-    border-left-color: #28a745;
+.log-player {
+    color: #1f2a5a;
 }
 
-/* Vlastní tahy vs. tahy protihráčů - přebíjí barvy podle typu události výše */
-/* own = čistě soukromá zpráva (vidím jen já, např. "Lízl jsi kartu") */
-.message.own {
-    background: #dbe4ff;
-    border-left-color: #4c51bf;
+/* Štítek karty v textu - barva podle typu karty jako v ruce */
+.card-chip {
+    display: inline-block;
+    padding: 0 6px;
+    border-radius: 10px;
+    background: #eef0f6;
+    border: 1px solid #c3c8d6;
+    font-size: 0.92em;
+    font-weight: bold;
+    color: #444;
+    white-space: nowrap;
 }
 
-/* other = veřejná (broadcast) zpráva o tahu protihráče */
-.message.other {
-    background: #ffe8cc;
-    border-left-color: #fd7e14;
-}
+.card-chip-exploding_kitten { background: #fde8e8; border-color: #d63031; color: #a01f20; }
+.card-chip-defuse { background: #e0f6f1; border-color: #00a085; color: #006b58; }
+.card-chip-skip { background: #e3f0fc; border-color: #0984e3; color: #0662a8; }
+.card-chip-attack { background: #fde7f2; border-color: #e84393; color: #a8256a; }
+.card-chip-shuffle { background: #fdece7; border-color: #e17055; color: #a8452e; }
+.card-chip-see_future { background: #ecebfc; border-color: #6c5ce7; color: #4a3db8; }
+.card-chip-favor { background: #fff6dd; border-color: #e0b04a; color: #8a6510; }
+.card-chip-nope { background: #f0f2f4; border-color: #8f9ba3; color: #4f5b63; }
+.card-chip-reverse { background: #fde8e8; border-color: #d63031; color: #a01f20; }
 
-/* own-public = můj tah, ale zpráva je veřejná/broadcast (vidí ji i protihráči) */
-.message.own-public {
-    background: #cdf0ea;
-    border-left-color: #0f9b8e;
-}
+/* Druhy událostí: kdo / jak důležité */
+.message.log-mine { background: #eef2ff; border-left-color: #667eea; }
+.message.log-other { background: #fff; border-left-color: #c3c8d6; }
+.message.log-private { background: #f6f0ff; border-left-color: #8b5cf6; }
+.message.log-good { background: #e8f7ee; border-left-color: #28a745; }
+.message.log-danger { background: #fdecee; border-left-color: #dc3545; }
+.message.log-warn { background: #fff6e6; border-left-color: #f0a020; }
 
-/* defused = přežití Výbušného koťátka - vždy vlastní výrazná barva, bez ohledu na own/other */
-.message.defused {
-    background: #d1ecf1;
-    border-left-color: #0dcaf0;
-    color: #055160;
-}
-
-/* died = smrt na Výbušné koťátko - vždy vlastní výrazná barva, bez ohledu na own/other */
-.message.died {
-    background: #e7d4c0;
-    border-left-color: #8b4513;
-    color: #5a3a1f;
+.log-private-badge {
+    display: inline-block;
+    margin-left: 6px;
+    padding: 0 5px;
+    border-radius: 6px;
+    background: #8b5cf6;
+    color: white;
+    font-size: 0.7em;
+    font-weight: bold;
+    vertical-align: middle;
 }
 
 /* See Future Modal */
@@ -1259,7 +1290,7 @@ header h1 {
     }
     
     .messages {
-        height: 130px;
+        height: 150px;
         font-size: 0.85em;
     }
     
@@ -1269,7 +1300,7 @@ header h1 {
     }
     
     .message {
-        padding: 8px;
+        padding: 5px 8px;
         font-size: 0.9em;
     }
     

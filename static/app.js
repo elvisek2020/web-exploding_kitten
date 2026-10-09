@@ -314,16 +314,17 @@ function handleMessage(message) {
         }
 
         case 'card_played': {
-            // card_played se broadcastuje všem hráčům - i moje karty vidí protihráči,
-            // proto pro moje tahy použij 'own-public' (odlišné od čistě soukromých zpráv 'own')
-            const cardOwner = message.player_id === playerId ? 'own-public' : 'other';
-            const target = message.target_player_name ? ` na hráče ${message.target_player_name}` : '';
-            addMessage(`${message.player_name} zahrál kartu ${getCardTypeName(message.card_type)}${target}`, 'success', cardOwner);
+            const mine = message.player_id === playerId;
+            const kind = mine ? 'mine' : 'other';
+            const played = { card: message.card_type };
+            const target = message.target_player_name ? [' od ', { player: message.target_player_name }] : [];
+            if (mine) logEvent(kind, CARD_ICONS[message.card_type], 'Hraješ ', played, ...target);
+            else logEvent(kind, CARD_ICONS[message.card_type], { player: message.player_name }, ' hraje ', played, ...target);
             if (message.result?.action_cancelled) {
-                addMessage(`🚫 Akce ${getCardTypeName(message.result.original_card_type || '')} byla zrušena!`, 'error', cardOwner);
+                logEvent('warn', '🚫', { card: message.result.original_card_type }, ' zrušeno kartou ', { card: 'NOPE' });
             }
             if (message.result?.action_restored) {
-                addMessage(`↩️ Akce ${getCardTypeName(message.result.original_card_type || '')} byla obnovena!`, 'success', cardOwner);
+                logEvent('warn', '↩️', { card: message.result.original_card_type }, ' znovu platí');
             }
             if (currentGameState) {
                 currentGameState.can_nope = message.can_nope || false;
@@ -338,43 +339,45 @@ function handleMessage(message) {
             break;
 
         case 'favor_card_received':
-            addMessage(`✅ Od hráče ${message.from_player_name} jsi dostal kartu: ${message.card_title}`, 'success', 'own');
+            logEvent('private', '🤲', 'Od ', { player: message.from_player_name }, ' máš ', { cardTitle: message.card_title });
             break;
 
         case 'favor_card_taken':
-            addMessage(`❌ ${message.from_player_name} ti vzal kartu: ${message.card_title}`, 'error', 'own');
+            logEvent('danger', '😿', { player: message.from_player_name }, ' ti vzal ', { cardTitle: message.card_title });
             break;
 
         case 'player_died':
-            // Smrt na Výbušné koťátko má vždy svou původní (hnědou) barvu, bez ohledu na own/other
-            addMessage(`💀 ${message.player_name} zemřel!`, 'died');
+            if (message.player_id === playerId) logEvent('danger', '💥', 'Vybuchl jsi – konec hry pro tebe');
+            else logEvent('danger', '💥', { player: message.player_name }, ' vybuchl!');
             playSound('exploding_kitten');
             if (message.player_id === playerId) showExplosionEffect();
             break;
 
         case 'player_disconnected':
-            addMessage(`📡 ${message.player_name} se odpojil – čeká se ${message.grace_seconds} s na návrat`, 'error');
+            logEvent('warn', '📡', { player: message.player_name }, ` se odpojil, čekáme ${message.grace_seconds} s`);
             break;
 
         case 'player_reconnected':
-            addMessage(`🔌 ${message.player_name} se vrátil do hry`, 'success');
+            logEvent('good', '🔌', { player: message.player_name }, ' je zpět ve hře');
             break;
 
         case 'player_left': {
-            const texts = {
-                left: `🚪 ${message.player_name} opustil hru`,
-                timeout: `⌛ ${message.player_name} se nevrátil včas a vypadl ze hry`,
-                disconnected: `📴 ${message.player_name} se odpojil a vypadl ze hry`,
+            const reasons = {
+                left: ['🚪', ' opustil hru'],
+                timeout: ['⌛', ' se nevrátil včas a vypadl'],
+                disconnected: ['📴', ' se odpojil a vypadl'],
             };
-            addMessage(texts[message.reason] || texts.left, 'error');
+            const [icon, text] = reasons[message.reason] || reasons.left;
+            logEvent('warn', icon, { player: message.player_name }, text);
             break;
         }
 
         case 'game_end':
             if (message.winner_name) {
-                addMessage(`🎉 ${message.winner_name} vyhrál hru!`, 'success');
+                if (message.winner_id === playerId) logEvent('good', '🏆', 'Vyhrál jsi hru!');
+                else logEvent('good', '🏆', { player: message.winner_name }, ' vyhrál hru!');
             } else {
-                addMessage('🏁 Hru ukončil administrátor, bez vítěze', 'success');
+                logEvent('warn', '🏁', 'Hru ukončil administrátor, bez vítěze');
             }
             playSound('game_end');
             break;
@@ -395,7 +398,7 @@ function handleMessage(message) {
             break;
 
         case 'player_removed':
-            addMessage(`Hráč ${message.player_name} byl odebrán`, 'error');
+            logEvent('warn', '🚫', { player: message.player_name }, ' byl odebrán adminem');
             break;
 
         case 'deck_view':
@@ -405,16 +408,15 @@ function handleMessage(message) {
             break;
 
         case 'card_drawn':
-            addMessage('Lízl jsi kartu: ' + message.card.title, 'success', 'own');
+            logEvent('private', '🃏', 'Lízl jsi ', { card: message.card.type, title: message.card.title });
             break;
 
         case 'exploding_kitten_defused':
-            // Přežití je vždy výrazná (vlastní) barva, bez ohledu na to, kdo přežil
             if (message.player_id === playerId) {
-                addMessage('🛡️ Přežil jsi Výbušné koťátko pomocí Zneškodni!', 'defused');
+                logEvent('good', '🛡️', 'Zneškodnil jsi ', { card: 'EXPLODING_KITTEN' });
                 playSound('defused');
             } else {
-                addMessage(`🛡️ ${message.player_name} přežil Výbušné koťátko pomocí Zneškodni!`, 'defused');
+                logEvent('good', '🛡️', { player: message.player_name }, ' zneškodnil ', { card: 'EXPLODING_KITTEN' });
             }
             break;
     }
@@ -1013,15 +1015,45 @@ function initButtons() {
 // =========================================================================
 const MAX_CHAT_MESSAGES = 4;
 
-function addMessage(text, type = '', owner = '') {
+const CARD_ICONS = {
+    EXPLODING_KITTEN: '💣', DEFUSE: '🛡️', SKIP: '⏭️', ATTACK: '⚔️', SHUFFLE: '🔀',
+    SEE_FUTURE: '🔮', FAVOR: '🤲', NOPE: '✋', REVERSE: '🔄',
+};
+
+// Zápis do Průběhu hry.
+// kind: mine (můj veřejný tah), other (tah soupeře), private (vidím jen já),
+//       good, danger, warn (důležité události)
+// parts: text, {player: jméno}, {card: TYP} nebo {cardTitle: název}
+function logEvent(kind, icon, ...parts) {
     const div = document.getElementById('game-messages');
     if (!div) return;
+
+    let plain = '';
+    const html = parts.map(part => {
+        if (typeof part === 'string') {
+            plain += part;
+            return escapeHtml(part);
+        }
+        if (part.player !== undefined) {
+            plain += part.player;
+            return `<strong class="log-player">${escapeHtml(part.player)}</strong>`;
+        }
+        const title = part.title || part.cardTitle || getCardTypeName(part.card || '');
+        plain += title;
+        const cardType = part.card || cardTypeByTitle(part.cardTitle);
+        const type = cardType ? ` card-chip-${String(cardType).toLowerCase()}` : '';
+        return `<span class="card-chip${type}">${escapeHtml(title)}</span>`;
+    }).join('');
+
     const m = document.createElement('div');
-    m.className = `message ${type} ${owner}`.trim();
-    m.title = text;
-    const t = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-    m.innerHTML = `<span class="message-time">${t}</span><span class="message-text">${escapeHtml(text)}</span>`;
-    div.firstChild ? div.insertBefore(m, div.firstChild) : div.appendChild(m);
+    m.className = `message log-${kind}`;
+    m.title = plain;
+    const t = new Date().toLocaleTimeString('cs-CZ', { hour: '2-digit', minute: '2-digit' });
+    m.innerHTML = `
+        <span class="message-icon">${icon || '•'}</span>
+        <span class="message-text">${html}${kind === 'private' ? '<span class="log-private-badge" title="Tuhle zprávu vidíš jen ty">jen ty</span>' : ''}</span>
+        <span class="message-time">${t}</span>`;
+    div.insertBefore(m, div.firstChild);
     while (div.children.length > MAX_CHAT_MESSAGES) {
         div.removeChild(div.lastChild);
     }
@@ -1038,6 +1070,10 @@ function playSound(soundName) {
         }, { once: true });
         audio.play().catch(() => {});
     } catch (e) { /* ignore */ }
+}
+
+function cardTypeByTitle(title) {
+    return Object.keys(CARD_ICONS).find(type => getCardTypeName(type) === title) || null;
 }
 
 function getCardTypeName(type) {
